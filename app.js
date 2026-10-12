@@ -228,6 +228,9 @@ function renderSettings() {
     <div class="section-title">Rappel du dimanche</div>
     <button class="secondary" data-action="enable-push">${data.settings.pushSub ? 'Voir mon code de notification' : 'Activer les notifications'}</button>
     <p class="help">Chaque dimanche matin, une notification te rappelle de te peser. La mise en route (une seule fois) est expliquée dans le README.</p>
+    <div class="section-title">Pas (app Santé)</div>
+    <button class="secondary" data-action="steps-gist">${data.settings.stepsGist ? 'Synchro automatique activée · modifier' : 'Activer la synchro automatique'}</button>
+    <p class="help">Une automatisation iPhone envoie tes pas plusieurs fois par jour ; l'app les récupère toute seule à l'ouverture. Mise en route dans le README.</p>
     <div class="section-title">Recherche des calories</div>
     <button class="secondary" data-action="ai-mode">ChatGPT : ${AI_MODES[data.settings.aiMode || 'off']}</button>
     <p class="help">L'app utilise d'abord sa base intégrée. Si un plat est inconnu, elle peut demander à ChatGPT avec ton abonnement (via l'app ChatGPT), puis tu recolles la réponse.</p>
@@ -237,7 +240,7 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.3</p>`;
+    <p class="help">Ma Semaine · version 0.4</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -653,7 +656,8 @@ function renderHealth() {
   // Pas
   html += `
     <div class="section-title">Pas (app Santé)</div>
-    ${state.stepsPending ? '<button class="primary" data-action="paste-steps">📋 Coller les pas importés</button>' : ''}
+    ${state.stepsPending && !data.settings.stepsGist ? '<button class="primary" data-action="paste-steps">📋 Coller les pas importés</button>' : ''}
+    ${renderGistStatus()}
     <div class="row-buttons">
       <button class="secondary" data-action="sync-steps">Synchroniser avec Santé</button>
       <button class="secondary" data-action="edit-steps">Saisir</button>
@@ -828,9 +832,79 @@ function syncSteps() {
   setTimeout(render, 800);
 }
 
+// --- Synchro automatique : une automatisation iOS dépose les pas dans un gist secret GitHub,
+// que l'app relit à chaque ouverture (lecture sans clé : seul l'identifiant du gist est stocké ici).
+
+const GIST_FILE = 'pas.txt';
+const GIST_MIN_INTERVAL = 2 * 60 * 1000;
+
+const gistIdFrom = input => (String(input).match(/[0-9a-f]{20,}/i) || [null])[0];
+
+function renderGistStatus() {
+  const s = data.settings;
+  if (!s.stepsGist) {
+    return '<p class="help" style="margin:0 4px 8px"><button class="text-btn" data-action="steps-gist" style="padding:0">Activer la synchro automatique</button> pour ne plus rien avoir à faire.</p>';
+  }
+  if (state.gistError) return `<p class="help" style="margin:0 4px 8px;color:var(--danger)">Synchro auto en échec : ${esc(state.gistError)}</p>`;
+  if (!s.stepsSyncedAt) return '<p class="help" style="margin:0 4px 8px">🔄 Synchro auto activée · en attente du premier envoi du raccourci</p>';
+  return `<p class="help" style="margin:0 4px 8px">🔄 Synchro auto · données envoyées ${fmtAgo(s.stepsSyncedAt)}</p>`;
+}
+
+function fmtAgo(isoDate) {
+  const d = new Date(isoDate);
+  const min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return 'à l\'instant';
+  if (min < 60) return `il y a ${min} min`;
+  const sameDay = toISO(d) === toISO(new Date());
+  return `${sameDay ? 'aujourd\'hui' : fmtShort(d)} à ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function fetchStepsFromGist(force = false) {
+  const id = data.settings.stepsGist;
+  if (!id || !navigator.onLine) return;
+  if (!force && state.lastGistFetch && Date.now() - state.lastGistFetch < GIST_MIN_INTERVAL) return;
+  state.lastGistFetch = Date.now();
+  try {
+    const res = await fetch(`https://api.github.com/gists/${id}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } });
+    if (!res.ok) throw new Error(res.status === 404 ? 'gist introuvable (vérifie le lien)' : `erreur ${res.status}`);
+    const gist = await res.json();
+    const file = gist.files[GIST_FILE] || Object.values(gist.files)[0];
+    if (!file) throw new Error('gist vide');
+    const text = file.truncated ? await (await fetch(file.raw_url, { cache: 'no-store' })).text() : file.content;
+    const totals = parseSteps(text, toISO(new Date(gist.updated_at)));
+    let changed = gist.updated_at !== data.settings.stepsSyncedAt || !!state.gistError;
+    Object.entries(totals).forEach(([d, n]) => { if (data.steps[d] !== n) { data.steps[d] = n; changed = true; } });
+    data.settings.stepsSyncedAt = gist.updated_at;
+    state.gistError = null;
+    state.stepsPending = false;
+    if (changed) {
+      save();
+      if (state.tab === 'health' && !sheet.open) render();
+    }
+  } catch (e) {
+    state.gistError = e.message;
+    if (state.tab === 'health' && !sheet.open) render();
+  }
+}
+
+function editStepsGist() {
+  const current = data.settings.stepsGist ? `https://gist.github.com/${data.settings.stepsGist}` : '';
+  const v = prompt('Lien de ton gist secret (voir le README, « Synchro automatique des pas »). Laisse vide pour désactiver :', current);
+  if (v === null) return;
+  const id = gistIdFrom(v);
+  if (v.trim() && !id) { toast('Lien de gist non reconnu'); return; }
+  data.settings.stepsGist = id || undefined;
+  delete data.settings.stepsSyncedAt;
+  state.gistError = null;
+  save();
+  render();
+  if (id) { toast('Synchro automatique activée'); fetchStepsFromGist(true); }
+  else toast('Synchro automatique désactivée');
+}
+
 // Accepte « 2026-10-12: 8432 » (une ligne par jour, ou des échantillons bruts qu'on additionne),
-// les dates JJ/MM/AAAA, ou un simple nombre (pas du jour affiché).
-function parseSteps(text) {
+// les dates JJ/MM/AAAA, ou un simple nombre (attribué à `fallbackDate`, par défaut le jour affiché).
+function parseSteps(text, fallbackDate = state.healthDate) {
   const toInt = s => parseInt(s.replace(/[\s\u202f\u00a0]/g, '').replace(/[.,]\d{1,2}$/, '').replace(/[.,]/g, ''), 10);
   const totals = {};
   const re = /(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})[^\d]+?(\d[\d \u202f\u00a0.,]*)/g;
@@ -843,7 +917,7 @@ function parseSteps(text) {
   }
   if (!Object.keys(totals).length) {
     const n = toInt((text.match(/\d[\d \u202f\u00a0.,]*/) || [''])[0]);
-    if (!isNaN(n)) totals[state.healthDate] = n;
+    if (!isNaN(n)) totals[fallbackDate] = n;
   }
   return totals;
 }
@@ -1002,6 +1076,7 @@ document.querySelector('.tabbar').addEventListener('click', e => {
   state.tab = b.dataset.tab;
   render();
   window.scrollTo(0, 0);
+  if (state.tab === 'health') fetchStepsFromGist();
 });
 
 view.addEventListener('click', e => {
@@ -1031,6 +1106,7 @@ view.addEventListener('click', e => {
     case 'sync-steps': syncSteps(); break;
     case 'paste-steps': pasteSteps(); break;
     case 'edit-steps': editSteps(); break;
+    case 'steps-gist': editStepsGist(); break;
     case 'add-weight': openWeightSheet(); break;
     case 'weight-tip': state.weightTip = b.dataset.date; render(); break;
     case 'profile': openProfileSheet(); break;
@@ -1058,7 +1134,10 @@ if ('serviceWorker' in navigator) {
 
 // Retour dans l'app (après le raccourci Santé par exemple)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.tab === 'health' && !sheet.open) render();
+  if (document.visibilityState !== 'visible') return;
+  if (state.tab === 'health' && !sheet.open) render();
+  // Retour après « Synchroniser » : le raccourci vient d'envoyer les pas, on relit tout de suite
+  fetchStepsFromGist(state.stepsPending);
 });
 
 // Ouverture depuis la notification du dimanche
@@ -1070,3 +1149,4 @@ if (new URLSearchParams(location.search).has('pesee')) {
 } else {
   render();
 }
+fetchStepsFromGist(true);

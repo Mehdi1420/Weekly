@@ -1,5 +1,5 @@
 // Cache hors-ligne. Incrémenter VERSION à chaque mise à jour de l'app.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'foods.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,7 @@ self.addEventListener('activate', e => {
 
 // Réseau d'abord (pour recevoir les mises à jour), cache si hors connexion
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return res; })
