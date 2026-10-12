@@ -1,5 +1,5 @@
 // Cache hors-ligne. Incrémenter VERSION à chaque mise à jour de l'app.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'foods.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

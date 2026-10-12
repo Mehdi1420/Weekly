@@ -4,7 +4,7 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.2)
+## Fonctionnalités (v0.3)
 
 - **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
 - **Activités** : banque d'idées, « Planifier », et « Propose-moi une activité » (tirage au sort).
@@ -12,6 +12,7 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
   - **Calories** : on tape ses repas comme on parle (« pâtes carbonara, 2 croissants et un coca », « grande assiette de riz poulet »). L'app découpe, reconnaît les plats (base intégrée de ~250 plats et aliments courants, portions habituelles) et additionne. Les quantités (« 2 », « deux ») et tailles (« petit », « grande ») sont prises en compte. Un plat inconnu se complète à la main et est retenu pour la suite, ou peut être confié à **ChatGPT avec ton abonnement** (optionnel, voir plus bas).
   - **Pas** : import depuis l'app Santé via un raccourci iOS, conversion en calories dépensées.
   - **Objectif du jour** : métabolisme de base (selon profil et dernière pesée) + pas, ajusté selon l'objectif (perdre / maintenir / prendre).
+  - **Maintien calorique automatique** : recalculé à chaque pesée hebdomadaire à partir de ce que tu as réellement mangé et de l'évolution de ton poids sur les 4 dernières semaines (moyenne des kcal notées − variation du poids × 7 700 kcal/kg). Il remplace la formule théorique dans l'objectif du jour dès qu'il y a 2 pesées et 5 jours de repas notés, et devient « fiable » après 3 pesées et 2 semaines notées. Détail semaine par semaine.
   - **Poids** : une pesée par semaine, courbe d'évolution, rappel le dimanche par notification.
 - **Réglages** : profil, notifications, ChatGPT, export / import.
 

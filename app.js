@@ -237,7 +237,7 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.2</p>`;
+    <p class="help">Ma Semaine · version 0.3</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -425,14 +425,137 @@ function profileComplete() {
 // Calories dépensées en marchant : environ 0,5 kcal par pas et par 1 000 kg (≈ 0,035 kcal/pas à 70 kg)
 const stepsKcal = steps => steps * (latestWeight() || 70) * 0.0005;
 
-// Objectif du jour : métabolisme de base (Mifflin-St Jeor) × 1,2 + calories des pas + ajustement selon l'objectif
-function dailyTarget(steps) {
+// --- Maintien calorique adaptatif ---
+// Principe : si on mange en moyenne A kcal/jour et que le poids varie de P kg/jour,
+// alors le maintien vaut A − P × 7 700 (≈ kcal contenues dans 1 kg de masse corporelle).
+// Recalculé à chaque nouvelle pesée hebdomadaire, sur les 4 dernières semaines.
+const KCAL_PER_KG = 7700;
+const MAINT_WINDOW_DAYS = 28;
+const MIN_LOGGED_DAYS = 5;
+
+function intakeByDay() {
+  const m = {};
+  data.food.forEach(f => { m[f.date] = (m[f.date] || 0) + (f.kcal || 0); });
+  return m;
+}
+
+// Jours strictement après `from` jusqu'à `to` inclus ; seuls les jours où des repas sont notés comptent
+function periodStats(from, to, intake) {
+  let days = 0, logged = 0, sum = 0, stepsSum = 0, stepsDays = 0;
+  for (let d = addDays(fromISO(from), 1); toISO(d) <= to; d = addDays(d, 1)) {
+    const iso = toISO(d);
+    days++;
+    if (intake[iso] > 0) { logged++; sum += intake[iso]; }
+    if (data.steps[iso] > 0) { stepsDays++; stepsSum += data.steps[iso]; }
+  }
+  return { days, logged, avg: logged ? sum / logged : null, avgSteps: stepsDays ? stepsSum / stepsDays : null };
+}
+
+const sortedWeights = () => [...data.weights].sort((a, b) => a.date.localeCompare(b.date));
+
+function computeMaintenance() {
+  const ws = sortedWeights();
+  if (ws.length < 2) return { ready: false, weighIns: ws.length, logged: 0 };
+  const last = ws[ws.length - 1];
+  const limit = toISO(addDays(fromISO(last.date), -MAINT_WINDOW_DAYS));
+  let pts = ws.filter(w => w.date >= limit);
+  if (pts.length < 2) pts = ws.slice(-2);
+  const stats = periodStats(pts[0].date, last.date, intakeByDay());
+  if (stats.logged < MIN_LOGGED_DAYS) return { ready: false, weighIns: ws.length, logged: stats.logged };
+
+  // Tendance du poids (régression linéaire) : moins sensible à une pesée isolée
+  const xs = pts.map(w => (fromISO(w.date) - fromISO(pts[0].date)) / 864e5);
+  const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const my = pts.reduce((a, w) => a + w.kg, 0) / pts.length;
+  const slope = xs.reduce((a, x, i) => a + (x - mx) * (pts[i].kg - my), 0) / xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+
+  const kcal = Math.round(stats.avg - slope * KCAL_PER_KG);
+  return {
+    ready: true, kcal, avgIntake: stats.avg, kgPerWeek: slope * 7, logged: stats.logged, days: stats.days,
+    weeks: Math.round(stats.days / 7), avgSteps: stats.avgSteps,
+    reliable: stats.logged >= 14 && pts.length >= 3 && stats.logged / stats.days >= 0.6,
+    plausible: kcal >= 1200 && kcal <= 5000,
+  };
+}
+
+// Détail semaine par semaine (entre deux pesées consécutives)
+function weeklyMaintenance() {
+  const ws = sortedWeights();
+  const intake = intakeByDay();
+  const rows = [];
+  for (let i = 1; i < ws.length; i++) {
+    const st = periodStats(ws[i - 1].date, ws[i].date, intake);
+    const delta = ws[i].kg - ws[i - 1].kg;
+    rows.push({
+      date: ws[i].date, delta, avg: st.avg, logged: st.logged, days: st.days,
+      kcal: st.logged >= 3 ? Math.round(st.avg - (delta * KCAL_PER_KG) / st.days) : null,
+    });
+  }
+  return rows.reverse();
+}
+
+function formulaMaintenance() {
   if (!profileComplete()) return null;
   const p = data.profile;
-  const kg = latestWeight() || 70;
-  const bmr = 10 * kg + 6.25 * p.height - 5 * p.age + (p.sex === 'f' ? -161 : 5);
-  const goal = { perdre: -400, maintenir: 0, prendre: 300 }[p.goal || 'maintenir'];
-  return { base: bmr * 1.2, steps: stepsKcal(steps), goal, total: bmr * 1.2 + stepsKcal(steps) + goal };
+  const bmr = 10 * (latestWeight() || 70) + 6.25 * p.height - 5 * p.age + (p.sex === 'f' ? -161 : 5);
+  return bmr * 1.2;
+}
+
+// Objectif du jour : maintien calculé sur tes données si possible, sinon formule théorique
+// (métabolisme de base Mifflin-St Jeor × 1,2 + pas), puis ajustement selon l'objectif.
+function dailyTarget(steps) {
+  const goal = { perdre: -400, maintenir: 0, prendre: 300 }[data.profile.goal || 'maintenir'];
+  const m = computeMaintenance();
+  if (m.ready && m.plausible) {
+    // Le maintien inclut déjà tes pas habituels : on n'ajoute que les pas en plus de ta moyenne
+    const extra = m.avgSteps !== null ? Math.max(0, stepsKcal(steps - m.avgSteps)) : 0;
+    return { source: 'adaptatif', base: m.kcal, steps: extra, goal, total: m.kcal + extra + goal };
+  }
+  const base = formulaMaintenance();
+  if (base === null) return null;
+  return { source: 'formule', base, steps: stepsKcal(steps), goal, total: base + stepsKcal(steps) + goal };
+}
+
+function renderMaintenance() {
+  const m = computeMaintenance();
+  const f = formulaMaintenance();
+  const sign = x => (x > 0 ? '+' : x < 0 ? '−' : '±');
+  const kg = x => `${sign(x)}${Math.abs(x).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} kg`;
+  let html = '<div class="section-title">Maintien calorique · mis à jour chaque semaine</div><div class="card">';
+  if (m.ready) {
+    html += `
+      <div class="chart-head">
+        <span class="stat">${fmtNum(m.kcal)} kcal/jour</span>
+        <span class="badge ${m.reliable && m.plausible ? 'ok' : ''}">${m.reliable && m.plausible ? 'fiable' : 'provisoire'}</span>
+      </div>
+      <p class="help" style="margin:4px 0 0">Sur ${m.weeks <= 1 ? 'la dernière semaine' : `les ${m.weeks} dernières semaines`}, tu as mangé en moyenne
+        <b>${fmtNum(m.avgIntake)} kcal/jour</b> (${m.logged} jours notés sur ${m.days}) et ton poids a évolué de <b>${kg(m.kgPerWeek)} par semaine</b>.</p>
+      ${m.plausible ? '' : '<p class="help" style="margin:6px 0 0;color:var(--danger)">Résultat peu crédible : vérifie que tous tes repas sont bien notés. L\'objectif utilise la formule théorique en attendant.</p>'}
+      ${!m.reliable && m.plausible ? '<p class="help" style="margin:6px 0 0">Il devient fiable après 3 pesées et 2 semaines de repas notés.</p>' : ''}`;
+  } else {
+    const steps = [
+      `${Math.min(m.weighIns, 2)}/2 pesées`,
+      `${Math.min(m.logged, MIN_LOGGED_DAYS)}/${MIN_LOGGED_DAYS} jours de repas notés entre deux pesées`,
+    ];
+    html += `<div class="idea-title">Calcul en préparation</div>
+      <p class="help" style="margin:4px 0 0">Il faut au moins : ${steps.join(' et ')}. Note tes repas chaque jour et pèse-toi le dimanche.</p>`;
+  }
+  if (f !== null) html += `<p class="help" style="margin:8px 0 0">Estimation théorique (profil) : ${fmtNum(f)} kcal/jour + tes pas.</p>`;
+  html += '</div>';
+
+  const rows = weeklyMaintenance().slice(0, 6);
+  if (rows.length) {
+    html += `<div class="list">${rows.map(r => `
+      <div class="idea">
+        <span class="idea-main">
+          <div class="idea-title">Semaine au ${fmtShort(fromISO(r.date))}</div>
+          <div class="idea-meta">${r.avg === null ? 'repas non notés' : `mangé ${fmtNum(r.avg)} kcal/j (${r.logged}/${r.days} j)`} · ${kg(r.delta)}</div>
+        </span>
+        <span class="kcal">${r.kcal === null ? '–' : `≈ ${fmtNum(r.kcal)}`}</span>
+      </div>`).join('')}</div>
+      <p class="help" style="margin:6px 4px 14px">Le chiffre de chaque semaine varie beaucoup (eau, sel…) ; le maintien en haut lisse sur 4 semaines.</p>`;
+  }
+  return html;
 }
 
 function isoWeekKey(iso) {
@@ -481,7 +604,7 @@ function renderHealth() {
     </div>`;
   if (target) {
     html += `<div class="meter"><div class="meter-fill ${left < 0 ? 'over' : ''}" style="width:${pct}%"></div></div>
-      <p class="help" style="margin:-4px 4px 14px">Objectif ${fmtNum(target.total)} kcal = repos ${fmtNum(target.base)} + pas ${fmtNum(target.steps)}${target.goal ? ` ${target.goal < 0 ? '−' : '+'} ${Math.abs(target.goal)} (${data.profile.goal})` : ''}</p>`;
+      <p class="help" style="margin:-4px 4px 14px">Objectif ${fmtNum(target.total)} kcal = ${target.source === 'adaptatif' ? `maintien ${fmtNum(target.base)} (tes données)${target.steps >= 1 ? ` + pas en plus ${fmtNum(target.steps)}` : ''}` : `repos ${fmtNum(target.base)} + pas ${fmtNum(target.steps)}`}${target.goal ? ` ${target.goal < 0 ? '−' : '+'} ${Math.abs(target.goal)} (${data.profile.goal})` : ''}</p>`;
   } else {
     html += `<p class="help" style="margin:-4px 4px 14px"><button class="text-btn" data-action="profile" style="padding:0">Renseigne ton profil</button> pour avoir un objectif calorique.</p>`;
   }
@@ -538,7 +661,7 @@ function renderHealth() {
 
   // Poids
   html += `<div class="section-title">Poids · pesée hebdomadaire</div>${renderWeightChart()}
-    <button class="secondary" data-action="add-weight">Ajouter une pesée</button>`;
+    <button class="secondary" data-action="add-weight">Ajouter une pesée</button>${renderMaintenance()}`;
 
   view.innerHTML = html;
 }
@@ -778,7 +901,8 @@ function openWeightSheet() {
     save();
     sheet.close();
     render();
-    toast('Pesée enregistrée');
+    const m = computeMaintenance();
+    toast(m.ready && m.plausible ? `Pesée enregistrée · maintien ≈ ${fmtNum(m.kcal)} kcal/j` : 'Pesée enregistrée');
   };
   bindSheetButtons(() => {});
   sheet.showModal();

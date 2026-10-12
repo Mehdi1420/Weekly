@@ -181,3 +181,6 @@ button:disabled { opacity: .6; }
 
 .row-buttons .primary { flex: 2; margin-bottom: 10px; }
 .suggestion .row-buttons .secondary { flex: 1; }
+
+.badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); }
+.badge.ok { background: color-mix(in srgb, #34c759 18%, transparent); color: #248a3d; }
