@@ -1,6 +1,6 @@
 // Cache hors-ligne. Incrémenter VERSION à chaque mise à jour de l'app.
-const VERSION = 'v1';
-const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'v2';
+const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'foods.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -20,4 +20,20 @@ self.addEventListener('fetch', e => {
       .then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return res; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
   );
+});
+
+// Rappel de pesée du dimanche, envoyé par la GitHub Action « Rappel pesée »
+self.addEventListener('push', e => {
+  let msg = { title: 'Ma Semaine', body: "C'est dimanche : pense à te peser ⚖️" };
+  try { if (e.data) msg = { ...msg, ...e.data.json() }; } catch { /* texte brut */ }
+  e.waitUntil(self.registration.showNotification(msg.title, { body: msg.body, icon: 'icons/icon-192.png', data: { url: msg.url || './?pesee=1' } }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(list => {
+    const win = list[0];
+    return win ? win.navigate(url).then(w => (w || win).focus()) : self.clients.openWindow(url);
+  }));
 });

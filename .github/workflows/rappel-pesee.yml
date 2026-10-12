@@ -1,0 +1,20 @@
+name: Rappel pesée
+
+on:
+  schedule:
+    # Chaque dimanche à 7 h UTC (9 h en été, 8 h en hiver à Paris)
+    - cron: '0 7 * * 0'
+  workflow_dispatch: {}
+
+jobs:
+  notifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save web-push@3.6.7
+      - run: node scripts/send-push.mjs
+        env:
+          PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
