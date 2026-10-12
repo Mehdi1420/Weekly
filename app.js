@@ -229,8 +229,8 @@ function renderSettings() {
     <button class="secondary" data-action="enable-push">${data.settings.pushSub ? 'Voir mon code de notification' : 'Activer les notifications'}</button>
     <p class="help">Chaque dimanche matin, une notification te rappelle de te peser. La mise en route (une seule fois) est expliquée dans le README.</p>
     <div class="section-title">Recherche des calories</div>
-    <button class="secondary" data-action="api-key">${data.settings.apiKey ? 'Recherche IA activée · modifier la clé' : 'Activer la recherche IA (optionnel)'}</button>
-    <p class="help">Sans clé, l'app utilise sa base intégrée de plats courants. Avec une clé API Claude, n'importe quel plat est reconnu.</p>
+    <button class="secondary" data-action="ai-mode">ChatGPT : ${AI_MODES[data.settings.aiMode || 'off']}</button>
+    <p class="help">L'app utilise d'abord sa base intégrée. Si un plat est inconnu, elle peut demander à ChatGPT avec ton abonnement (via l'app ChatGPT), puis tu recolles la réponse.</p>
     <div class="section-title">Sauvegarde</div>
     <button class="secondary" data-action="export">Exporter mes données</button>
     <button class="secondary" data-action="import">Importer une sauvegarde</button>
@@ -493,7 +493,24 @@ function renderHealth() {
       <label><textarea id="food-text" placeholder="Ex : pâtes carbonara, 2 croissants et un coca"></textarea></label>
       <label>Repas <select id="food-meal">${MEALS.map(m => `<option value="${m.id}" ${m.id === currentMeal() ? 'selected' : ''}>${m.name}</option>`).join('')}</select></label>
     </div>
-    <button class="primary" data-action="add-food" id="add-food-btn">Calculer et ajouter</button>`;
+    <div class="row-buttons">
+      <button class="primary" data-action="add-food" id="add-food-btn">Calculer et ajouter</button>
+      ${(data.settings.aiMode || 'off') !== 'off' ? '<button class="secondary" data-action="ask-ai">Demander à ChatGPT</button>' : ''}
+    </div>`;
+
+  const pending = data.settings.pendingAI;
+  if (pending) {
+    html += `
+      <div class="suggestion">
+        <div class="label">En attente de ChatGPT</div>
+        <div class="idea-meta" style="margin:4px 0 10px">« ${esc(pending.text)} »</div>
+        <button class="primary" data-action="paste-ai">📋 Coller la réponse de ChatGPT</button>
+        <div class="row-buttons">
+          <button class="secondary" style="margin:0" data-action="local-ai">Base intégrée</button>
+          <button class="secondary" style="margin:0" data-action="cancel-ai">Annuler</button>
+        </div>
+      </div>`;
+  }
 
   MEALS.forEach(m => {
     const items = food.filter(f => f.meal === m.id);
@@ -561,29 +578,90 @@ function renderWeightChart() {
 
 // --- Repas ---
 
-async function addFood() {
+const AI_MODES = { off: 'désactivé', shortcut: 'via le raccourci', web: 'via le site' };
+
+// Base intégrée d'abord ; si un plat est inconnu (ou sur demande), on passe la main à ChatGPT
+function addFood(forceAI = false) {
   const textEl = document.getElementById('food-text');
   const text = textEl.value.trim();
   if (!text) { textEl.focus(); return; }
   const meal = document.getElementById('food-meal').value;
-  const btn = document.getElementById('add-food-btn');
-  let items;
-  if (data.settings.apiKey && navigator.onLine) {
-    btn.disabled = true;
-    btn.textContent = 'Recherche en cours…';
-    try {
-      items = await estimateAI(text, data.settings.apiKey);
-    } catch (e) {
-      toast(`IA indisponible (${e.message}) : base intégrée utilisée`);
-    }
+  const items = estimateLocal(text, data.customFoods);
+  const unknown = items.filter(i => i.kcal === null).length;
+  if ((forceAI || unknown) && (data.settings.aiMode || 'off') !== 'off') {
+    askChatGPT(text, meal);
+    return;
   }
-  if (!items) items = estimateLocal(text, data.customFoods);
-  items.forEach(i => data.food.push({ id: uid(), date: state.healthDate, meal, ...i }));
+  addItems(items, meal, state.healthDate);
+}
+
+function addItems(items, meal, date) {
+  items.forEach(i => data.food.push({ id: uid(), date, meal, ...i }));
   save();
   render();
   const total = items.reduce((s, i) => s + (i.kcal || 0), 0);
   const unknown = items.filter(i => i.kcal === null).length;
   toast(unknown ? `${unknown} aliment${unknown > 1 ? 's' : ''} à compléter` : `+${fmtNum(total)} kcal`);
+}
+
+function askChatGPT(text, meal) {
+  data.settings.pendingAI = { text, meal, date: state.healthDate };
+  save();
+  render();
+  const prompt = chatgptPrompt(text);
+  if (data.settings.aiMode === 'shortcut') {
+    location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(CHATGPT_SHORTCUT)}&input=text&text=${encodeURIComponent(prompt)}`;
+  } else {
+    window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, '_blank');
+  }
+}
+
+async function pasteChatGPT() {
+  const pending = data.settings.pendingAI;
+  if (!pending) return;
+  let text = null;
+  try { text = await navigator.clipboard.readText(); } catch { /* permission refusée */ }
+  let items = text ? parseChatGPT(text) : [];
+  if (!items.length) {
+    text = prompt('Colle ici la réponse de ChatGPT :');
+    if (!text) return;
+    items = parseChatGPT(text);
+  }
+  if (!items.length) { toast('Réponse non reconnue : copie bien toute la réponse'); return; }
+  delete data.settings.pendingAI;
+  addItems(items, pending.meal, pending.date);
+}
+
+function cancelChatGPT(useLocal) {
+  const pending = data.settings.pendingAI;
+  delete data.settings.pendingAI;
+  if (useLocal && pending) addItems(estimateLocal(pending.text, data.customFoods), pending.meal, pending.date);
+  else { save(); render(); }
+}
+
+function openAiSheet() {
+  const mode = data.settings.aiMode || 'off';
+  sheetForm.innerHTML = `
+    <div class="sheet-head">
+      <button type="button" class="text-btn" data-close>Annuler</button>
+      <h2>ChatGPT</h2>
+      <button type="submit" class="text-btn">OK</button>
+    </div>
+    <div class="field">
+      <label>Utiliser ChatGPT <select name="mode">${Object.entries(AI_MODES).map(([k, v]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${v[0].toUpperCase() + v.slice(1)}</option>`).join('')}</select></label>
+    </div>
+    <p class="help"><b>Via le raccourci</b> (conseillé) : le raccourci « ${CHATGPT_SHORTCUT} » interroge l'app ChatGPT et copie la réponse ; à créer une fois (voir le README).<br>
+    <b>Via le site</b> : ouvre ChatGPT avec la question déjà écrite ; copie la réponse puis reviens.<br>
+    Dans les deux cas, c'est ton abonnement qui est utilisé, sans frais en plus.</p>`;
+  sheetForm.onsubmit = e => {
+    e.preventDefault();
+    data.settings.aiMode = new FormData(sheetForm).get('mode');
+    save();
+    sheet.close();
+    render();
+  };
+  bindSheetButtons(() => {});
+  sheet.showModal();
 }
 
 function openFoodSheet(item) {
@@ -739,15 +817,6 @@ function openProfileSheet() {
   sheet.showModal();
 }
 
-function editApiKey() {
-  const v = prompt('Clé API Claude (commence par sk-ant-). Laisse vide pour désactiver la recherche IA :', data.settings.apiKey || '');
-  if (v === null) return;
-  data.settings.apiKey = v.trim() || undefined;
-  save();
-  render();
-  toast(v.trim() ? 'Recherche IA activée' : 'Recherche IA désactivée');
-}
-
 // --- Notifications (rappel de pesée du dimanche) ---
 
 const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -841,7 +910,11 @@ view.addEventListener('click', e => {
     case 'add-weight': openWeightSheet(); break;
     case 'weight-tip': state.weightTip = b.dataset.date; render(); break;
     case 'profile': openProfileSheet(); break;
-    case 'api-key': editApiKey(); break;
+    case 'ai-mode': openAiSheet(); break;
+    case 'ask-ai': addFood(true); break;
+    case 'paste-ai': pasteChatGPT(); break;
+    case 'local-ai': cancelChatGPT(true); break;
+    case 'cancel-ai': cancelChatGPT(false); break;
     case 'enable-push': enablePush(); break;
     case 'export': exportData(); break;
     case 'import': importData(); break;

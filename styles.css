@@ -178,3 +178,6 @@ dialog[open] { animation: up .22s ease-out; }
 .chart .dot-pt { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
 .chart .hit { fill: transparent; cursor: pointer; }
 button:disabled { opacity: .6; }
+
+.row-buttons .primary { flex: 2; margin-bottom: 10px; }
+.suggestion .row-buttons .secondary { flex: 1; }

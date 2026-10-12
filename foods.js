@@ -380,62 +380,31 @@ function estimateLocal(text, custom) {
   return results;
 }
 
-// ---------- Estimation par IA (optionnelle, avec une clé API Claude) ----------
-// Appel HTTP direct : l'app n'a pas d'étape de build pour embarquer le SDK.
+// ---------- Estimation par ChatGPT (avec l'abonnement, via l'app ChatGPT) ----------
+// L'abonnement ChatGPT ne donne pas accès à l'API : on passe par l'app ChatGPT (raccourci iOS
+// « Demander à ChatGPT ») ou par le site, puis on recolle la réponse dans l'app.
 
-async function estimateAI(text, apiKey) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'server-side-fallback-2026-07-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-5-5',
-      max_tokens: 4000,
-      fallbacks: 'default',
-      output_config: {
-        effort: 'low',
-        format: {
-          type: 'json_schema',
-          schema: {
-            type: 'object',
-            properties: {
-              items: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    name: { type: 'string' },
-                    portion: { type: 'string' },
-                    kcal: { type: 'integer' },
-                  },
-                  required: ['name', 'portion', 'kcal'],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ['items'],
-            additionalProperties: false,
-          },
-        },
-      },
-      system: 'Tu estimes les calories de repas décrits de façon approximative par un utilisateur français. ' +
-        'Découpe la description en aliments ou plats, suppose des portions habituelles en France quand rien n\'est précisé, ' +
-        'tiens compte des quantités et tailles indiquées (petit, grand, 2…). Noms et portions en français, courts.',
-      messages: [{ role: 'user', content: text }],
-    }),
+const CHATGPT_SHORTCUT = 'Calories ChatGPT';
+
+function chatgptPrompt(text) {
+  return 'Estime les calories de ce repas. Si les quantités ne sont pas précisées, suppose des portions habituelles en France. ' +
+    'Réponds uniquement avec une ligne par aliment ou plat, au format : nom | portion | kcal (un nombre entier), sans titre, sans total, sans autre texte.\n' +
+    `Repas : ${text}`;
+}
+
+// Lit « Pâtes carbonara | 1 assiette | 750 », y compris dans un tableau Markdown ou une liste à puces
+function parseChatGPT(answer) {
+  const items = [];
+  answer.split(/\r?\n/).forEach(line => {
+    const clean = line.trim().replace(/^[-*•]\s*|^\d+[.)]\s*/, '').replace(/^\||\|$/g, '').replace(/\*\*/g, '');
+    const parts = clean.split('|').map(x => x.trim()).filter(Boolean);
+    if (parts.length < 2 || /^:?-{2,}/.test(parts[0]) || /^(nom|aliment|plat|total)\b/i.test(parts[0])) return;
+    const nums = (parts[parts.length - 1].match(/\d[\d\s\u202f\u00a0]*/g) || [])
+      .map(n => parseInt(n.replace(/\D/g, ''), 10)).filter(n => !isNaN(n));
+    if (!nums.length) return;
+    const kcal = nums.length > 1 ? Math.round((nums[0] + nums[1]) / 2) : nums[0]; // « 400-500 » → 450
+    const portion = parts.length > 2 ? parts.slice(1, -1).join(' · ') : '';
+    items.push({ name: parts[0], kcal, detail: `${portion ? `${portion} · ` : ''}estimation ChatGPT`, source: 'ia' });
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur ${res.status}`);
-  }
-  const msg = await res.json();
-  if (msg.stop_reason === 'refusal') throw new Error('Demande refusée');
-  const block = msg.content.find(b => b.type === 'text');
-  const parsed = JSON.parse(block.text);
-  return parsed.items.map(i => ({ name: i.name, kcal: i.kcal, detail: `${i.portion} · estimation IA`, source: 'ia' }));
+  return items;
 }
