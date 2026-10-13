@@ -118,7 +118,7 @@ main {
 }
 .tabbar button {
   border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font-size: 11px; color: var(--muted); padding: 4px 10px;
+  font-size: 10.5px; color: var(--muted); padding: 4px 4px; min-width: 60px;
 }
 .tabbar button.active { color: var(--accent); }
 .tabbar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -199,3 +199,12 @@ button:disabled { opacity: .6; }
 .today-row > span { flex: 1; min-width: 0; }
 #usual-foods .secondary { text-align: left; font-weight: 500; font-size: 14px; }
 #usual-foods .chips { margin-bottom: 10px; }
+
+/* Objectifs */
+.meter.small { height: 6px; margin: 6px 0 4px; }
+.badge.urgent { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.badge.soon { background: color-mix(in srgb, #ff9f0a 18%, transparent); color: #c77800; }
+.project-card { display: block; width: 100%; text-align: left; border: 0; }
+.field label.step span { flex: 1; font-size: 15px; }
+.help-steps p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.help-steps p:last-child { margin-bottom: 0; }
