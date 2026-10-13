@@ -240,9 +240,10 @@ function recommendBooks(n = 3) {
   const w = {};
   const add = (t, x) => { w[t] = (w[t] || 0) + x; };
   data.projects.filter(p => p.active).forEach(p => {
-    if (p.type === 'cert' || /aws|cloud/i.test(p.title)) { add('aws', 4); add('cloud', 2.5); add('devops', 1.5); }
+    if (/aws|cloud/i.test(p.title)) { add('aws', 4); add('cloud', 2.5); add('devops', 1.5); }
     if (p.type === 'learning' || /program|code|dev|python|javascript/i.test(p.title)) add('prog', 3);
   });
+  prefs().bookThemes.forEach(t => add(t, 2)); // goûts déclarés au questionnaire
   data.books.filter(b => b.status === 'done' && b.rating).forEach(b => (b.themes || []).forEach(t => add(t, (b.rating - 3) * 1.5)));
   // Niveau : nombre de livres techniques déjà lus (on commence par les plus accessibles)
   const techDone = data.books.filter(b => b.status === 'done' && (b.themes || []).some(t => TECH_THEMES.includes(t))).length;
@@ -310,10 +311,9 @@ function onEventDone(ev) {
 }
 
 // ---------- Planification des sessions (devoirs puis projets) ----------
-// Les sessions de travail vont en fin de journée en semaine, en journée le week-end.
+// Les sessions de travail vont en fin de journée en semaine, en journée le week-end
+// (plages calculées à partir de tes horaires : voir workWindow() et readingWindow()).
 
-const WORK_WINDOWS = { week: [17 * 60, 22 * 60 + 30], weekend: [9 * 60 + 30, 20 * 60] };
-const READING_WINDOW = [20 * 60 + 30, 23 * 60];
 const MAX_WORK_PER_DAY = 2;
 // Charge d'une journée : sessions et loisirs proposés ou prévus (la lecture du soir ne compte pas)
 const MAX_PER_DAY_TOTAL = { week: 2, weekend: 3 };
@@ -344,7 +344,7 @@ function planWorkSessions(weekStart, ctx) {
     const iso = toISO(addDays(weekStart, i));
     if (iso >= ctx.today) days.push(iso);
   }
-  const winFor = iso => (weekdayOf(iso) >= 5 ? WORK_WINDOWS.weekend : WORK_WINDOWS.week);
+  const winFor = workWindow;
   const count = iso => dayLoad(iso, ctx);
   const push = (iso, start, dur, extra) => ctx.props.push({
     id: uid(), date: iso, start: fromMin(start), end: fromMin(Math.min(start + dur, 23 * 60 + 59)), ...extra,
@@ -380,7 +380,7 @@ function planWorkSessions(weekStart, ctx) {
       if (!reading && count(iso) >= MAX_WORK_PER_DAY) continue;
       if (data.events.some(e => e.projectId === p.id && e.date === iso) || ctx.props.some(x => x.projectId === p.id && x.date === iso)) continue;
       const prefer = projectUsualStart(p, iso) ?? (reading ? 21 * 60 + 30 : null);
-      const start = placeSession(ctx, iso, dur, reading ? READING_WINDOW : winFor(iso), prefer);
+      const start = placeSession(ctx, iso, dur, reading ? readingWindow() : winFor(iso), prefer);
       if (start === null) continue;
       const next = p.steps.find(st => !st.done);
       push(iso, start, dur, { kind: 'project', projectId: p.id, title: sessionTitle(p), category: p.category, notes: next ? `Étape : ${next.title}` : '' });

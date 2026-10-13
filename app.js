@@ -19,9 +19,9 @@ const STORAGE_KEY = 'ma-semaine-v1';
 const DEFAULT_IDEAS = [
   { title: 'Course à pied', category: 'sport', duration: 45 },
   { title: 'Séance de sport', category: 'sport', duration: 60 },
-  { title: 'Dîner entre amis', category: 'social', duration: 120 },
+  { title: 'Dîner entre amis', category: 'social', duration: 120, at: '20:00' },
   { title: 'Appeler la famille', category: 'social', duration: 30 },
-  { title: 'Cinéma', category: 'loisirs', duration: 150 },
+  { title: 'Cinéma', category: 'loisirs', duration: 150, at: '20:30' },
   { title: 'Lecture', category: 'loisirs', duration: 45 },
   { title: 'Courses de la semaine', category: 'maison', duration: 60 },
   { title: 'Ménage', category: 'maison', duration: 60 },
@@ -98,7 +98,14 @@ function toast(msg) {
 }
 
 function render() {
-  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+  // Onglets selon les modules choisis au questionnaire
+  const mods = prefs().modules;
+  const hidden = { goals: !mods.goals, health: !mods.forme };
+  if (hidden[state.tab]) state.tab = 'week';
+  document.querySelectorAll('.tabbar button').forEach(b => {
+    b.hidden = !!hidden[b.dataset.tab];
+    b.classList.toggle('active', b.dataset.tab === state.tab);
+  });
   if (state.tab === 'week') renderWeek();
   else if (state.tab === 'ideas') renderIdeas();
   else if (state.tab === 'health') renderHealth();
@@ -127,7 +134,7 @@ function renderWeek() {
 
   let html = `
     <div class="header">
-      <h1>${isCurrent ? 'Cette semaine' : 'Semaine'}</h1>
+      <h1>${isCurrent ? (data.settings.name ? `Salut ${esc(data.settings.name)}` : 'Cette semaine') : 'Semaine'}</h1>
       <div class="week-nav">
         ${isCurrent ? '' : '<button class="text-btn" data-action="today">Aujourd\'hui</button>'}
         <button class="icon-btn" data-action="prev" aria-label="Semaine précédente">‹</button>
@@ -306,6 +313,9 @@ function renderSettings() {
   const p = data.profile;
   view.innerHTML = `
     <div class="header"><h1>Réglages</h1></div>
+    <div class="section-title">Mes préférences</div>
+    <button class="secondary" data-action="onboarding">Refaire le questionnaire (goûts, horaires, modules)</button>
+    <p class="help">Sports, centres d'intérêt, horaires, objectifs et modules affichés. Tes données sont conservées.</p>
     <div class="section-title">Profil (pour l'objectif calorique)</div>
     <button class="secondary" data-action="profile">${profileComplete() ? `${p.sex === 'f' ? 'Femme' : 'Homme'} · ${p.age} ans · ${p.height} cm` : 'Renseigner mon profil'}</button>
     <div class="section-title">Rappel du dimanche</div>
@@ -323,7 +333,7 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.6</p>`;
+    <p class="help">Ma Semaine · version 0.7</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -1299,6 +1309,7 @@ view.addEventListener('click', e => {
     }
     case 'books-chatgpt': booksChatGPT(); break;
     case 'moodle-help': openMoodleHelp(); break;
+    case 'onboarding': startOnboarding(); break;
     case 'today-yes': {
       const idea = data.ideas.find(i => i.id === id);
       if (idea) { data.events.push(newEvent(toISO(new Date()), { ...idea, start: fromMin(+b.dataset.start) })); save(); render(); toast('Ajouté à ta journée'); }
@@ -1353,3 +1364,4 @@ if (new URLSearchParams(location.search).has('pesee')) {
   render();
 }
 fetchStepsFromGist(true);
+if (!data.settings.onboarded) startOnboarding();

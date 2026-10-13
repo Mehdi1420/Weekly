@@ -4,7 +4,9 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.6)
+## Fonctionnalités (v0.7)
+
+**Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
 
 - **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
 - **Apprentissage des habitudes** (tout est calculé sur le téléphone)
