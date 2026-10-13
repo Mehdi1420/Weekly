@@ -143,6 +143,25 @@ function renderWeek() {
     </div>
     <p class="subtitle">Du ${fmtShort(start)} au ${fmtShort(end)} · ${weekEvents.length} activité${weekEvents.length > 1 ? 's' : ''}</p>`;
 
+  // Ouverte dans Safari : prévenir que les données de l'app installée ne sont pas ici
+  if (!isStandalone && /iPhone|iPad/.test(navigator.userAgent) && !state.safariDismissed) {
+    html += `
+      <div class="suggestion warn">
+        <div class="label">Tu es dans Safari</div>
+        <div class="idea-meta" style="margin:4px 0 10px">Si l'app est déjà sur ton écran d'accueil, ouvre-la depuis son icône : Safari et l'app installée ne partagent pas les mêmes données. Pour l'installer : Partager → Sur l'écran d'accueil.</div>
+        <button class="secondary" style="margin:0" data-action="safari-ok">Compris</button>
+      </div>`;
+  }
+  // Semaine type pas encore décrite : on invite à le faire (le planning s'organise autour)
+  if (data.settings.onboarded && !prefs().lifeText && !state.lifeDismissed) {
+    html += `
+      <div class="suggestion">
+        <div class="label">Pour mieux t'organiser</div>
+        <div class="idea-title" style="margin:4px 0 6px">Décris ta semaine en quelques mots</div>
+        <div class="idea-meta" style="margin-bottom:10px">Travail, cours, horaires, sport, habitudes… L'app crée tes activités régulières et planifie autour.</div>
+        <div class="row"><button class="secondary" data-action="life-later">Plus tard</button><button class="primary" data-action="life-describe">Décrire ma semaine</button></div>
+      </div>`;
+  }
   if (isCurrent) html += renderToday();
 
   const detected = isPast ? null : detectRoutines()[0];
@@ -314,6 +333,7 @@ function renderSettings() {
   view.innerHTML = `
     <div class="header"><h1>Réglages</h1></div>
     <div class="section-title">Mes préférences</div>
+    <button class="secondary" data-action="life-describe">Décrire ma semaine type</button>
     <button class="secondary" data-action="onboarding">Refaire le questionnaire (goûts, horaires, modules)</button>
     <p class="help">Sports, centres d'intérêt, horaires, objectifs et modules affichés. Tes données sont conservées.</p>
     <div class="section-title">Profil (pour l'objectif calorique)</div>
@@ -328,12 +348,14 @@ function renderSettings() {
     <button class="secondary" data-action="ai-mode">Recherche IA : ${AI_MODES[aiMode()]}</button>
     <p class="help">Avec Gemini, chaque repas tapé est analysé automatiquement par l'IA (gratuit, clé à créer une fois). Sans IA, l'app utilise sa base intégrée de plats courants.</p>
     <div class="section-title">Sauvegarde</div>
+    <button class="secondary" data-action="check-updates">Vérifier les mises à jour</button>
+    <p class="help">L'app se met à jour toute seule quand tu l'ouvres. Ne la supprime pas de l'écran d'accueil : cela effacerait tes données.</p>
     <button class="secondary" data-action="export">Exporter mes données</button>
     <button class="secondary" data-action="import">Importer une sauvegarde</button>
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.8</p>`;
+    <p class="help">Ma Semaine · version 0.9</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -482,7 +504,9 @@ function defaultPlanDate() {
 
 function exportData() {
   // La clé IA n'est pas exportée : la sauvegarde peut être partagée ou stockée ailleurs
-  const copy = { ...data, settings: { ...data.settings, geminiKey: undefined } };
+  // La clé IA n'est incluse que si tu le veux (utile pour tout restaurer après une réinstallation)
+  const withKey = data.settings.geminiKey && confirm('Inclure ta clé Gemini dans la sauvegarde ?\n(OK seulement si tu gardes ce fichier pour toi)');
+  const copy = { ...data, settings: { ...data.settings, geminiKey: withKey ? data.settings.geminiKey : undefined } };
   const blob = new Blob([JSON.stringify(copy, null, 2)], { type: 'application/json' });
   const file = new File([blob], `ma-semaine-${toISO(new Date())}.json`, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1382,6 +1406,10 @@ view.addEventListener('click', e => {
     case 'books-chatgpt': booksChatGPT(); break;
     case 'moodle-help': openMoodleHelp(); break;
     case 'onboarding': startOnboarding(); break;
+    case 'check-updates': checkUpdates(); break;
+    case 'safari-ok': state.safariDismissed = true; render(); break;
+    case 'life-describe': startOnboarding('life'); break;
+    case 'life-later': state.lifeDismissed = true; render(); break;
     case 'today-yes': {
       const idea = data.ideas.find(i => i.id === id);
       if (idea) { data.events.push(newEvent(toISO(new Date()), { ...idea, start: fromMin(+b.dataset.start) })); save(); render(); toast('Ajouté à ta journée'); }
@@ -1414,9 +1442,36 @@ view.addEventListener('click', e => {
   }
 });
 
+// Mises à jour : l'app se met à jour toute seule à l'ouverture (rien à réinstaller).
+// Quand une nouvelle version prend la main, on recharge une fois pour l'afficher.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    if (sheet.open || document.getElementById('onboarding')) { toast('Nouvelle version prête : elle s\'affichera à la prochaine ouverture'); return; }
+    sessionStorage.setItem('ma-semaine-updated', '1');
+    location.reload();
+  });
+  if (sessionStorage.getItem('ma-semaine-updated')) {
+    sessionStorage.removeItem('ma-semaine-updated');
+    setTimeout(() => toast('App mise à jour ✓'), 500);
+  }
 }
+
+async function checkUpdates() {
+  toast('Recherche de mise à jour…');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.update();
+  } catch { /* hors connexion */ }
+  setTimeout(() => location.reload(), 800);
+}
+
+// Ouverte dans Safari alors que l'app est installée : ce ne sont pas les mêmes données
+const isStandalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
 
 // Retour dans l'app (après le raccourci Santé par exemple)
 document.addEventListener('visibilitychange', () => {

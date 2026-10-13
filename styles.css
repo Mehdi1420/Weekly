@@ -234,3 +234,6 @@ button:disabled { opacity: .6; }
 body.ob-open { overflow: hidden; }
 body.ob-open .tabbar { display: none; }
 .ob-sub { font-size: 20px; margin: 22px 0 6px; }
+.ob-body textarea { min-height: 150px; font-size: 16px; line-height: 1.45; }
+.suggestion.warn { border-color: #ff9f0a; }
+.suggestion.warn .label { color: #c77800; }

@@ -62,11 +62,14 @@ const readingWindow = () => { const end = prefMinutes('bedtime', '23:00'); retur
 
 // ---------- Écran ----------
 
-const OB_STEPS = ['welcome', 'modules', 'rhythm', 'sports', 'interests', 'goals', 'health', 'done'];
+const OB_STEPS = ['welcome', 'modules', 'life', 'rhythm', 'sports', 'interests', 'goals', 'health', 'done'];
 let ob = null; // état du questionnaire en cours
 
-function startOnboarding() {
-  ob = { step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '', geminiKey: data.settings.geminiKey || '' };
+function startOnboarding(stepName) {
+  ob = {
+    step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '', geminiKey: data.settings.geminiKey || '',
+    lifeText: (data.prefs && data.prefs.lifeText) || '', analyzedText: null, routines: [],
+  };
   let el = document.getElementById('onboarding');
   if (!el) {
     el = document.createElement('div');
@@ -75,6 +78,7 @@ function startOnboarding() {
     el.addEventListener('click', onboardingClick);
   }
   document.body.classList.add('ob-open');
+  if (stepName) ob.step = Math.max(0, obVisibleSteps().indexOf(stepName));
   renderOnboarding();
 }
 
@@ -105,9 +109,26 @@ function renderOnboarding() {
         <label><span><b>🎯 Études et projets perso</b><br><small>Devoirs, cours Moodle, certifications, lecture…</small></span><input type="checkbox" data-ob-mod="goals" ${p.modules.goals ? 'checked' : ''}></label>
         <label><span><b>❤️ Forme</b><br><small>Calories, pas, poids</small></span><input type="checkbox" data-ob-mod="forme" ${p.modules.forme ? 'checked' : ''}></label>
       </div>`;
-  } else if (name === 'rhythm') {
+  } else if (name === 'life') {
     body = `
-      <h1>Ton rythme</h1>
+      <h1>Ta semaine en quelques mots</h1>
+      <p class="ob-lead">Décris ce que tu fais en ce moment, comme tu le dirais à un ami : travail, cours, horaires, sport, petites habitudes… L'app planifiera autour.</p>
+      <div class="field"><label><textarea data-ob-life rows="7" placeholder="Ex : Je travaille en alternance du lundi au mercredi de 9h à 17h30 et j'ai cours le jeudi et le vendredi. Foot le mardi soir vers 20h, muscu 2 fois par semaine. Je lis un peu avant de dormir et je prépare la certification AWS.">${esc(ob.lifeText)}</textarea></label></div>
+      ${data.settings.geminiKey ? '<p class="help">🤖 Ton texte sera analysé par l\'IA (Gemini).</p>' : `
+      <p class="help" style="margin-bottom:8px">Sans clé, l'app comprend les formulations simples. Avec une clé Gemini gratuite (<b>aistudio.google.com/apikey</b>), l'IA comprend tout ton texte et calcule aussi les calories de tes repas automatiquement.</p>
+      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`}`;
+  } else if (name === 'rhythm') {
+    const kept = ob.routines;
+    body = `
+      ${kept.length ? `
+      <h1>Ce que j'ai compris</h1>
+      <p class="ob-lead">Ces activités reviendront chaque semaine dans ton planning. Décoche ce qui ne va pas (tu pourras tout modifier ensuite).</p>
+      <div class="field">${kept.map((r, i) => `
+        <label><span><span class="dot" style="background:${cat(r.category).color};display:inline-block;margin-right:6px"></span><b>${esc(r.title)}</b><br>
+          <small>${daysLabel(r.days)[0].toUpperCase() + daysLabel(r.days).slice(1)} · ${r.start}–${r.end}</small></span>
+          <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
+      </div>` : ''}
+      <h${kept.length ? '2 class="ob-sub"' : '1'}>Ton rythme</h${kept.length ? '2' : '1'}>
       <p class="ob-lead">Pour proposer des activités quand tu es vraiment libre.</p>
       <div class="chips">${[['etudiant', '🎓 Étudiant·e'], ['actif', '💼 En activité'], ['autre', '🌱 Autre']].map(([id, l]) => chip('situation', id, l, p.situation === id)).join('')}</div>
       <div class="field">
@@ -155,15 +176,17 @@ function renderOnboarding() {
           <option value="maintenir" ${!pr.goal || pr.goal === 'maintenir' ? 'selected' : ''}>Maintenir</option>
           <option value="prendre" ${pr.goal === 'prendre' ? 'selected' : ''}>Prendre du poids</option></select></label>
       </div>
+      ${data.settings.geminiKey || ob.geminiKey ? '' : `
       <h2 class="ob-sub">Calcul des calories par l'IA</h2>
       <p class="ob-lead">Tu tapes ton repas comme tu parles, l'IA calcule les calories automatiquement. Gratuit avec une clé Google Gemini : <b>aistudio.google.com/apikey</b> → Create API key. Facultatif, modifiable dans les Réglages.</p>
-      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`;
+      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`}`;
   } else {
     const n = buildIdeas(p).length;
     body = `
       <div class="ob-hero">✨</div>
       <h1>C'est prêt${first} !</h1>
       <ul class="ob-recap">
+        ${ob.routines.filter(r => r.keep).length ? `<li>${ob.routines.filter(r => r.keep).length} activités régulières ajoutées à ton planning</li>` : ''}
         <li>${n} idées d'activités adaptées à tes goûts</li>
         ${p.modules.goals && p.goals.length ? `<li>${p.goals.length} projet${p.goals.length > 1 ? 's' : ''} créé${p.goals.length > 1 ? 's' : ''} dans Objectifs</li>` : ''}
         <li>Propositions entre ${p.eveningStart} et ${p.bedtime} en semaine, dès ${p.weekendStart} le week-end</li>
@@ -192,6 +215,9 @@ function readOnboardingFields() {
   el.querySelectorAll('[data-obp]').forEach(i => { ob.profile[i.dataset.obp] = i.type === 'number' ? +i.value || '' : i.value; });
   const k = el.querySelector('[data-ob-key]');
   if (k) ob.geminiKey = k.value.trim();
+  const life = el.querySelector('[data-ob-life]');
+  if (life) ob.lifeText = life.value.trim();
+  el.querySelectorAll('[data-ob-routine]').forEach(i => { ob.routines[+i.dataset.obRoutine].keep = i.checked; });
   const w = el.querySelector('[data-ob-weight]');
   if (w) ob.weight = parseFloat(String(w.value).replace(',', '.')) || '';
 }
@@ -209,10 +235,32 @@ function onboardingClick(e) {
   } else if (t.dataset.obStep) {
     ob.p.sportPerWeek = Math.max(0, Math.min(14, ob.p.sportPerWeek + +t.dataset.obStep));
     renderOnboarding();
-  } else if (t.dataset.obNav === 'next') { ob.step++; renderOnboarding(); }
+  } else if (t.dataset.obNav === 'next') {
+    if (obVisibleSteps()[ob.step] === 'life' && ob.lifeText && ob.lifeText !== ob.analyzedText) analyzeLifeStep(t);
+    else { ob.step++; renderOnboarding(); }
+  }
   else if (t.dataset.obNav === 'back') { ob.step--; renderOnboarding(); }
   else if (t.dataset.obNav === 'close') closeOnboarding();
   else if (t.dataset.obNav === 'finish') finishOnboarding();
+}
+
+// Analyse le texte libre puis passe à l'étape suivante, pré-remplie
+async function analyzeLifeStep(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Analyse en cours…';
+  const res = await analyzeLife(ob.lifeText, ob.geminiKey || data.settings.geminiKey);
+  if (!ob) return;
+  // Clé validée par l'analyse : on l'enregistre tout de suite (elle sert aussi aux calories)
+  if (res.by === 'ia' && ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
+    Object.assign(data.settings, { geminiKey: ob.geminiKey, aiMode: 'gemini' });
+    save();
+  }
+  applyLifeToOnboarding(res);
+  ob.analyzedText = ob.lifeText;
+  ob.step++;
+  renderOnboarding();
+  if (res.error) toast(`IA indisponible (${res.error}) : analyse simplifiée`);
+  else toast(res.routines.length ? `${res.routines.length} activité${res.routines.length > 1 ? 's' : ''} régulière${res.routines.length > 1 ? 's' : ''} repérée${res.routines.length > 1 ? 's' : ''}` : 'Rien de régulier repéré : complète les étapes suivantes');
 }
 
 function closeOnboarding() {
@@ -252,6 +300,7 @@ function finishOnboarding() {
   readOnboardingFields();
   const p = ob.p;
   const wasOnboarded = data.settings.onboarded;
+  p.lifeText = ob.lifeText;
   data.prefs = p;
   data.settings.name = p.name;
 
@@ -268,6 +317,22 @@ function finishOnboarding() {
     projectsFromGoals(p).forEach(x => { if (!titles.has(norm(x.title))) data.projects.push(x); });
   }
 
+  // Activités régulières comprises dans le texte : deviennent des routines (mises à jour si elles existent déjà)
+  const today = toISO(new Date());
+  ob.routines.filter(r => r.keep).forEach(r => {
+    const same = data.routines.find(x => norm(x.title) === norm(r.title) && x.days.join() === r.days.join());
+    const fields = { title: r.title, category: r.category, start: r.start, end: r.end, days: r.days, repeat: 'custom' };
+    if (same) {
+      Object.assign(same, fields);
+      data.events = data.events.filter(e => !(e.routineId === same.id && e.date >= today && !e.done)); // recréées avec les nouveaux horaires
+    } else {
+      data.routines.push({ id: uid(), ...fields, notes: '', from: today, skips: [] });
+    }
+  });
+  // La lecture du soir compte pour le projet Lecture
+  const rp = data.projects.find(x => x.type === 'reading' && x.active);
+  if (rp) data.routines.forEach(r => { if (/lecture|lire/i.test(r.title)) r.projectId = rp.id; });
+
   // Santé
   if (p.modules.forme) {
     const pr = ob.profile;
@@ -280,7 +345,7 @@ function finishOnboarding() {
   }
 
   // Clé Gemini : vérifiée en arrière-plan, la recherche IA s'active si elle est valide
-  if (p.modules.forme && ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
+  if (ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
     const key = ob.geminiKey;
     pickGeminiModel(key)
       .then(model => { Object.assign(data.settings, { geminiKey: key, geminiModel: model, aiMode: 'gemini' }); save(); toast('Recherche IA des calories activée'); })
