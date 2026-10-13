@@ -233,3 +233,4 @@ button:disabled { opacity: .6; }
 .tabbar button[hidden] { display: none; }
 body.ob-open { overflow: hidden; }
 body.ob-open .tabbar { display: none; }
+.ob-sub { font-size: 20px; margin: 22px 0 6px; }

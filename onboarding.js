@@ -66,7 +66,7 @@ const OB_STEPS = ['welcome', 'modules', 'rhythm', 'sports', 'interests', 'goals'
 let ob = null; // état du questionnaire en cours
 
 function startOnboarding() {
-  ob = { step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '' };
+  ob = { step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '', geminiKey: data.settings.geminiKey || '' };
   let el = document.getElementById('onboarding');
   if (!el) {
     el = document.createElement('div');
@@ -154,7 +154,10 @@ function renderOnboarding() {
           <option value="perdre" ${pr.goal === 'perdre' ? 'selected' : ''}>Perdre du poids</option>
           <option value="maintenir" ${!pr.goal || pr.goal === 'maintenir' ? 'selected' : ''}>Maintenir</option>
           <option value="prendre" ${pr.goal === 'prendre' ? 'selected' : ''}>Prendre du poids</option></select></label>
-      </div>`;
+      </div>
+      <h2 class="ob-sub">Calcul des calories par l'IA</h2>
+      <p class="ob-lead">Tu tapes ton repas comme tu parles, l'IA calcule les calories automatiquement. Gratuit avec une clé Google Gemini : <b>aistudio.google.com/apikey</b> → Create API key. Facultatif, modifiable dans les Réglages.</p>
+      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`;
   } else {
     const n = buildIdeas(p).length;
     body = `
@@ -187,6 +190,8 @@ function readOnboardingFields() {
   el.querySelectorAll('[data-ob]').forEach(i => { ob.p[i.dataset.ob] = i.value.trim(); });
   el.querySelectorAll('[data-ob-mod]').forEach(i => { ob.p.modules[i.dataset.obMod] = i.checked; });
   el.querySelectorAll('[data-obp]').forEach(i => { ob.profile[i.dataset.obp] = i.type === 'number' ? +i.value || '' : i.value; });
+  const k = el.querySelector('[data-ob-key]');
+  if (k) ob.geminiKey = k.value.trim();
   const w = el.querySelector('[data-ob-weight]');
   if (w) ob.weight = parseFloat(String(w.value).replace(',', '.')) || '';
 }
@@ -272,6 +277,14 @@ function finishOnboarding() {
       data.weights = data.weights.filter(w => isoWeekKey(w.date) !== isoWeekKey(today));
       data.weights.push({ date: today, kg: Math.round(ob.weight * 10) / 10 });
     }
+  }
+
+  // Clé Gemini : vérifiée en arrière-plan, la recherche IA s'active si elle est valide
+  if (p.modules.forme && ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
+    const key = ob.geminiKey;
+    pickGeminiModel(key)
+      .then(model => { Object.assign(data.settings, { geminiKey: key, geminiModel: model, aiMode: 'gemini' }); save(); toast('Recherche IA des calories activée'); })
+      .catch(err => toast(`Clé Gemini : ${err.message} (Réglages → Recherche IA)`));
   }
 
   data.settings.onboarded = true;
