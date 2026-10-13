@@ -67,6 +67,7 @@ function materializeRoutines(weekStart) {
       data.events.push({
         id: uid(), title: r.title, date: iso, start: r.start, end: r.end,
         category: r.category, notes: r.notes || '', done: false, routineId: r.id,
+        ...(r.projectId ? { projectId: r.projectId } : {}),
       });
       changed = true;
     });
@@ -216,9 +217,15 @@ function usualStart(title, iso) {
 }
 
 // Meilleures idées pour un créneau, chacune placée à son heure habituelle si elle tient dedans
+// Une idée déjà couverte par une routine (« Football » quand il y a la routine « Foot ») n'est pas proposée
+function coveredByRoutine(idea) {
+  const k = norm(idea.title);
+  return data.routines.some(r => { const rk = norm(r.title); return rk === k || (rk.length >= 4 && (k.includes(rk) || rk.includes(k))); });
+}
+
 function bestIdeas(iso, slot, exclude = new Set()) {
   return data.ideas
-    .filter(i => i.duration <= slot[1] - slot[0] && !exclude.has(i.id))
+    .filter(i => i.duration <= slot[1] - slot[0] && !exclude.has(i.id) && !coveredByRoutine(i))
     .map(i => {
       const u = usualStart(i.title, iso) ?? (i.at ? toMin(i.at) : null);
       const fits = u !== null && u >= slot[0] && u + i.duration <= slot[1];

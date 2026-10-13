@@ -318,9 +318,12 @@ const MAX_WORK_PER_DAY = 2;
 // Charge d'une journée : sessions et loisirs proposés ou prévus (la lecture du soir ne compte pas)
 const MAX_PER_DAY_TOTAL = { week: 2, weekend: 3 };
 const isReadingSession = x => { const p = x.projectId && data.projects.find(q => q.id === x.projectId); return !!(p && p.type === 'reading'); };
+// (le travail et les cours ne comptent pas : ils sont hors des plages libres ; la lecture du soir non plus)
 function dayLoad(iso, ctx) {
   return ctx.props.filter(p => p.date === iso && !isReadingSession(p)).length
-    + data.events.filter(e => e.date === iso && (e.taskId || (e.projectId && !isReadingSession(e)))).length;
+    + data.events.filter(e => e.date === iso && !['travail', 'etudes'].includes(e.category) && !isReadingSession(e)
+      && (e.taskId || e.projectId || e.routineId)).length
+    + data.events.filter(e => e.date === iso && e.taskId && e.category === 'etudes').length;
 }
 const dayCap = iso => (weekdayOf(iso) >= 5 ? MAX_PER_DAY_TOTAL.weekend : MAX_PER_DAY_TOTAL.week);
 

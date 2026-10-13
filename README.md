@@ -4,9 +4,9 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.8)
+## Fonctionnalités (v0.9)
 
-**Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
+**Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles, **ta semaine décrite librement en quelques phrases** (travail, alternance, cours, horaires, sport, habitudes : analysée par l'IA Gemini si une clé est donnée, sinon par un analyseur intégré ; les activités régulières deviennent des routines bloquées dans le planning et les étapes suivantes sont pré-remplies) (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
 
 - **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
 - **Apprentissage des habitudes** (tout est calculé sur le téléphone)
@@ -36,6 +36,12 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
 2. Ouvrir `https://mehdi1420.github.io/test/` dans **Safari**.
 3. Bouton Partager → **Sur l'écran d'accueil**. Ouvrir ensuite l'app depuis son icône.
 
+
+### Mises à jour : rien à réinstaller
+
+L'app installée se met à jour toute seule quand on l'ouvre (Réglages → **Vérifier les mises à jour** pour forcer).
+**Ne pas supprimer l'icône de l'écran d'accueil** pour mettre à jour : iOS efface alors toutes les données de l'app (historique, réglages, clé Gemini).
+Safari et l'app installée n'ont pas les mêmes données : toujours ouvrir l'app depuis son icône. Penser à **Exporter mes données** de temps en temps (la clé Gemini peut être incluse) ; **Importer une sauvegarde** restaure tout.
 ## Synchroniser les pas avec Santé (une seule fois)
 
 Une web app ne peut pas lire l'app Santé directement : un raccourci iOS sert de passerelle. Deux modes possibles.
