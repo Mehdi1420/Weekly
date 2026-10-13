@@ -186,9 +186,11 @@ function scoreIdea(idea, iso, startMin) {
   return score;
 }
 
-function freeSlots(iso, from = 0) {
-  const [a, b] = weekdayOf(iso) >= 5 ? FREE_WINDOWS.weekend : FREE_WINDOWS.week;
-  const busy = eventsOn(iso).map(e => [toMin(e.start), toMin(e.end)]);
+// Créneaux libres d'une journée dans une plage horaire, en tenant compte des activités
+// et des créneaux déjà réservés par d'autres propositions (`extra`)
+function freeSlots(iso, from = 0, extra = [], win = null) {
+  const [a, b] = win || (weekdayOf(iso) >= 5 ? FREE_WINDOWS.weekend : FREE_WINDOWS.week);
+  const busy = [...eventsOn(iso).map(e => [toMin(e.start), toMin(e.end)]), ...extra].sort((x, y) => x[0] - y[0]);
   let cur = Math.max(a, from);
   const slots = [];
   for (const [s, e] of busy) {
@@ -223,31 +225,36 @@ function bestIdeas(iso, slot, exclude = new Set()) {
     .sort((x, y) => y.score - x.score);
 }
 
-// Semaine proposée : les meilleures paires (jour, idée) d'abord, une idée au plus une fois,
-// une activité par soir de semaine et deux par jour de week-end, sans chevauchement
+// Semaine proposée, dans cet ordre : sessions pour les devoirs, sessions des projets perso,
+// puis loisirs (les meilleures paires jour/idée d'abord, une idée au plus une fois,
+// une par soir de semaine et deux par jour de week-end), sans chevauchement
 function proposeWeek(weekStart) {
-  const today = toISO(new Date());
+  const ctx = { today: toISO(new Date()), busy: {}, props: [] };
+  planWorkSessions(weekStart, ctx);
   const pairs = [];
   for (let i = 0; i < 7; i++) {
     const iso = toISO(addDays(weekStart, i));
-    if (iso < today) continue;
-    freeSlots(iso, iso === today ? roundTo(nowMinutes() + 30) : 0)
+    if (iso < ctx.today) continue;
+    freeSlots(iso, iso === ctx.today ? roundTo(nowMinutes() + 30) : 0, ctx.busy[iso] || [])
       .forEach(slot => bestIdeas(iso, slot).forEach(r => pairs.push({ iso, ...r })));
   }
   pairs.sort((x, y) => y.score - x.score);
   const used = new Set();
-  const props = [];
+  let ideas = 0;
   for (const p of pairs) {
-    if (props.length >= MAX_WEEK_PROPOSALS) break;
+    if (ideas >= MAX_WEEK_PROPOSALS) break;
     if (used.has(p.idea.id)) continue;
-    const sameDay = props.filter(x => x.date === p.iso);
+    const sameDay = ctx.props.filter(x => x.date === p.iso && x.kind === 'idea');
     if (sameDay.length >= (weekdayOf(p.iso) >= 5 ? MAX_PER_DAY.weekend : MAX_PER_DAY.week)) continue;
+    if (dayLoad(p.iso, ctx) >= dayCap(p.iso)) continue; // journée déjà bien remplie
     const end = Math.min(p.start + p.idea.duration, 23 * 60 + 59);
-    if (sameDay.some(x => p.start < toMin(x.end) && end > toMin(x.start))) continue;
+    if ((ctx.busy[p.iso] || []).some(([s, e]) => p.start < e && end > s)) continue;
     used.add(p.idea.id);
-    props.push({ id: uid(), ideaId: p.idea.id, title: p.idea.title, category: p.idea.category, date: p.iso, start: fromMin(p.start), end: fromMin(end) });
+    ideas++;
+    (ctx.busy[p.iso] ||= []).push([p.start, end]);
+    ctx.props.push({ id: uid(), kind: 'idea', ideaId: p.idea.id, title: p.idea.title, category: p.idea.category, date: p.iso, start: fromMin(p.start), end: fromMin(end) });
   }
-  return props.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
+  return ctx.props.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
 }
 
 // Prochain créneau libre aujourd'hui, avec la meilleure idée pour le remplir

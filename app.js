@@ -9,6 +9,7 @@ const CATEGORIES = [
   { id: 'loisirs', name: 'Loisirs', color: '#af52de' },
   { id: 'maison', name: 'Maison', color: '#a2845e' },
   { id: 'sante', name: 'Santé', color: '#ff375f' },
+  { id: 'etudes', name: 'Études', color: '#30b0c7' },
   { id: 'autre', name: 'Autre', color: '#8e8e93' },
 ];
 const cat = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
@@ -31,7 +32,7 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} } });
+const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} }, tasks: [], projects: [], books: [] });
 const withDefaults = d => ({ ...EMPTY_HEALTH(), ...d });
 
 function load() {
@@ -101,6 +102,7 @@ function render() {
   if (state.tab === 'week') renderWeek();
   else if (state.tab === 'ideas') renderIdeas();
   else if (state.tab === 'health') renderHealth();
+  else if (state.tab === 'goals') renderGoals();
   else renderSettings();
 }
 
@@ -220,7 +222,10 @@ function renderToday() {
 
 function acceptProposal(p) {
   const idea = data.ideas.find(i => i.id === p.ideaId);
-  data.events.push({ id: uid(), title: p.title, date: p.date, start: p.start, end: p.end, category: p.category, notes: idea ? idea.notes || '' : '', done: false });
+  const ev = { id: uid(), title: p.title, date: p.date, start: p.start, end: p.end, category: p.category, notes: p.notes || (idea ? idea.notes || '' : ''), done: false };
+  if (p.taskId) ev.taskId = p.taskId;
+  if (p.projectId) ev.projectId = p.projectId;
+  data.events.push(ev);
   state.proposals = state.proposals.filter(x => x.id !== p.id);
 }
 
@@ -318,7 +323,7 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.5</p>`;
+    <p class="help">Ma Semaine · version 0.6</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -361,10 +366,12 @@ function openEventSheet(ev, isNew) {
     const start = f.get('start');
     let end = f.get('end');
     if (toMin(end) <= toMin(start)) end = fromMin(Math.min(toMin(start) + 60, 23 * 60 + 59));
+    const wasDone = ev.done;
     Object.assign(ev, {
       title: f.get('title').trim(), date: f.get('date'), start, end,
       category: f.get('category'), notes: f.get('notes').trim(), done: f.get('done') === 'on',
     });
+    if (ev.done && !wasDone) onEventDone(ev);
     if (isNew) data.events.push(ev);
     const repeat = f.get('repeat');
     if (routine && repeat === repeatValue) {
@@ -953,6 +960,7 @@ function syncSteps() {
 // que l'app relit à chaque ouverture (lecture sans clé : seul l'identifiant du gist est stocké ici).
 
 const GIST_FILE = 'pas.txt';
+const CAL_FILE = 'cours.ics';
 const GIST_MIN_INTERVAL = 2 * 60 * 1000;
 
 const gistIdFrom = input => (String(input).match(/[0-9a-f]{20,}/i) || [null])[0];
@@ -985,10 +993,22 @@ async function fetchStepsFromGist(force = false) {
     const res = await fetch(`https://api.github.com/gists/${id}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) throw new Error(res.status === 404 ? 'gist introuvable (vérifie le lien)' : `erreur ${res.status}`);
     const gist = await res.json();
-    const file = gist.files[GIST_FILE] || Object.values(gist.files)[0];
-    if (!file) throw new Error('gist vide');
-    const text = file.truncated ? await (await fetch(file.raw_url, { cache: 'no-store' })).text() : file.content;
-    const totals = parseSteps(text, toISO(new Date(gist.updated_at)));
+    const read = async f => (f.truncated ? (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content);
+    // Calendrier Moodle déposé par la GitHub Action « Import calendrier »
+    const cal = gist.files[CAL_FILE];
+    if (cal) {
+      const ics = await read(cal);
+      const sig = `${ics.length}:${ics.slice(-200)}`;
+      if (sig !== data.settings.calSig) {
+        importCalendar(ics);
+        data.settings.calSig = sig;
+      }
+      data.settings.calSyncedAt = gist.updated_at;
+      save();
+      if (['week', 'goals'].includes(state.tab) && !sheet.open) render();
+    }
+    const file = gist.files[GIST_FILE];
+    const totals = file ? parseSteps(await read(file), toISO(new Date(gist.updated_at))) : {};
     let changed = gist.updated_at !== data.settings.stepsSyncedAt || !!state.gistError;
     Object.entries(totals).forEach(([d, n]) => { if (data.steps[d] !== n) { data.steps[d] = n; changed = true; } });
     data.settings.stepsSyncedAt = gist.updated_at;
@@ -1193,7 +1213,7 @@ document.querySelector('.tabbar').addEventListener('click', e => {
   state.tab = b.dataset.tab;
   render();
   window.scrollTo(0, 0);
-  if (state.tab === 'health') fetchStepsFromGist();
+  if (['health', 'goals', 'week'].includes(state.tab)) fetchStepsFromGist();
 });
 
 view.addEventListener('click', e => {
@@ -1257,7 +1277,28 @@ view.addEventListener('click', e => {
       if (p) { rejectIdea(p.title); state.proposals = state.proposals.filter(x => x !== p); save(); render(); }
       break;
     }
-    case 'mark-done': { const e = data.events.find(x => x.id === id); if (e) { e.done = true; save(); render(); } break; }
+    case 'mark-done': { const e = data.events.find(x => x.id === id); if (e) { e.done = true; onEventDone(e); save(); render(); } break; }
+    case 'plan-goals':
+      state.tab = 'week';
+      state.weekStart = startOfWeek(new Date());
+      state.proposals = proposeWeek(state.weekStart);
+      render();
+      window.scrollTo(0, 0);
+      toast(state.proposals.length ? `${state.proposals.length} sessions proposées : ✓ pour garder` : 'Rien à planifier cette semaine');
+      break;
+    case 'new-task': openTaskSheet({ id: uid(), title: '', estimate: 120, done: false, notes: '' }, true); break;
+    case 'edit-task': openTaskSheet(data.tasks.find(x => x.id === id), false); break;
+    case 'new-project': openProjectPicker(); break;
+    case 'edit-project': openProjectSheet(data.projects.find(x => x.id === id), false); break;
+    case 'new-book': openBookSheet({ id: uid(), title: '', author: '', pages: 0, page: 0, status: 'todo', rating: 0 }, true); break;
+    case 'edit-book': openBookSheet(data.books.find(x => x.id === id), false); break;
+    case 'add-rec': {
+      const bk = BOOKS.find(x => x.t === b.dataset.title);
+      if (bk) { addBook(bk); save(); render(); toast(`« ${bk.t} » ajouté à ta liste`); }
+      break;
+    }
+    case 'books-chatgpt': booksChatGPT(); break;
+    case 'moodle-help': openMoodleHelp(); break;
     case 'today-yes': {
       const idea = data.ideas.find(i => i.id === id);
       if (idea) { data.events.push(newEvent(toISO(new Date()), { ...idea, start: fromMin(+b.dataset.start) })); save(); render(); toast('Ajouté à ta journée'); }

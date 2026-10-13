@@ -4,7 +4,7 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.5)
+## Fonctionnalités (v0.6)
 
 - **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
 - **Apprentissage des habitudes** (tout est calculé sur le téléphone)
@@ -13,6 +13,12 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
   - **✨ Proposer ma semaine** : remplit les soirées libres (18 h–23 h) et les week-ends (10 h–23 h) avec les idées qui collent le mieux à tes habitudes (jour, moment de la journée, heure habituelle) et à ce qui manque cette semaine (une catégorie habituelle pas encore faite). ✓ pour accepter, ✕ pour refuser ; les refus sont retenus.
   - **Carte « Aujourd'hui »** : en cours, à suivre, activités passées à cocher, et une idée pour le prochain créneau libre.
   - **Repas habituels** : dans l'onglet Forme, « Comme d'habitude » refait ton dernier repas du même type en un toucher, et les aliments que tu prends souvent s'ajoutent d'un toucher.
+- **Objectifs**
+  - **Cours et devoirs Moodle** importés automatiquement (lien d'export du calendrier, jamais d'identifiants) : cours dans le planning (catégorie Études), devoirs et QCM dans « À rendre » avec date limite, temps estimé, temps déjà passé et prévu.
+  - **Sessions de travail planifiées** : le temps restant de chaque devoir est réparti sur les semaines avant l'échéance, en fin de journée en semaine et en journée le week-end.
+  - **Projets perso** avec modèles : Certification AWS (10 étapes), Progresser en programmation (7 étapes), Lecture, ou projet libre. Temps visé par semaine, durée des sessions, étapes à cocher, échéance.
+  - **Lecture** : livre en cours, page atteinte demandée après chaque session, vitesse de lecture apprise et date de fin estimée. Suggestions de livres selon tes projets (AWS, programmation), tes notes et ton niveau, et pour varier ; « Plus d'idées avec ChatGPT ».
+  - **✨ Planifier mes sessions** : devoirs d'abord, puis projets, puis loisirs ; 2 activités max par soir de semaine (plus la lecture), 3 le week-end.
 - **Activités** : banque d'idées, « Planifier », et « Propose-moi une activité » (tirage au sort).
 - **Forme**
   - **Calories** : on tape ses repas comme on parle (« pâtes carbonara, 2 croissants et un coca », « grande assiette de riz poulet »). L'app découpe, reconnaît les plats (base intégrée de ~250 plats et aliments courants, portions habituelles) et additionne. Les quantités (« 2 », « deux ») et tailles (« petit », « grande ») sont prises en compte. Un plat inconnu se complète à la main et est retenu pour la suite, ou peut être confié à **ChatGPT avec ton abonnement** (optionnel, voir plus bas).
@@ -70,6 +76,21 @@ Le bouton **Synchroniser avec Santé** lance aussi le raccourci à la demande : 
 ### Mode manuel (sans GitHub)
 
 Même raccourci, mais en remplaçant l'étape 4 par **Copier dans le presse-papiers**. Dans l'app : **Synchroniser avec Santé**, revenir dans l'app (lien « ◀ » en haut à gauche) et toucher **Coller les pas importés**. Un simple nombre collé ou saisi (**Saisir**) fonctionne aussi.
+
+## Importer les cours et devoirs Moodle (une seule fois)
+
+Pré-requis : la synchro automatique des pas (gist secret + clé `gist`) doit être en place, les cours passent par le même gist.
+
+1. Sur Moodle : **Calendrier** → **Importer ou exporter des calendriers** → **Exporter le calendrier**. Choisir « Tous les cours » et « Événements récents et à venir », puis **Obtenir l'adresse URL du calendrier** et la copier. Ce lien contient une clé privée : ne le partage pas.
+2. Dans le dépôt GitHub : Settings → Secrets and variables → Actions → **New repository secret**, trois fois :
+   - `MOODLE_ICS_URL` : le lien Moodle. Un emploi du temps au format iCal (ADE, Hyperplanning…) peut être ajouté sur une 2e ligne.
+   - `GIST_ID` : la fin de l'adresse du gist (après ton nom).
+   - `GIST_TOKEN` : la clé `ghp_…` limitée aux gists.
+3. Onglet **Actions** → **Import calendrier** → **Run workflow**. Ensuite l'import tourne toutes les 3 heures et l'app se met à jour à l'ouverture.
+
+Sans GitHub : Objectifs → Connecter Moodle → **importer un fichier .ics** téléchargé depuis Moodle.
+
+Les devoirs importés gardent ton temps estimé, tes notes et leur état « terminé » d'un import à l'autre. Un devoir supprimé dans l'app est masqué (il ne revient pas).
 
 ## Rappel de pesée du dimanche (une seule fois)
 
