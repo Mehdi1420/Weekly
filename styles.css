@@ -184,3 +184,18 @@ button:disabled { opacity: .6; }
 
 .badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); }
 .badge.ok { background: color-mix(in srgb, #34c759 18%, transparent); color: #248a3d; }
+
+/* Apprentissage */
+.event.ghost { align-items: center; border-top: 1px dashed var(--line); opacity: .95; }
+.event.ghost .bar { opacity: .45; }
+.event .grow { flex: 1; min-width: 0; }
+.mini { border: 0; width: 32px; height: 32px; border-radius: 50%; font-size: 15px; font-weight: 700; flex: none; display: grid; place-items: center; }
+.mini.ok { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.mini.no { background: var(--line); color: var(--muted); }
+.routine-icon { color: var(--muted); font-weight: 400; }
+.today-card .label { font-size: 12px; text-transform: uppercase; color: var(--accent); font-weight: 700; letter-spacing: .5px; margin-bottom: 4px; }
+.today-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 15px; border-top: 1px solid var(--line); }
+.today-row:first-of-type { border-top: 0; }
+.today-row > span { flex: 1; min-width: 0; }
+#usual-foods .secondary { text-align: left; font-weight: 500; font-size: 14px; }
+#usual-foods .chips { margin-bottom: 10px; }
