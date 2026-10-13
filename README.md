@@ -4,9 +4,15 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.4)
+## Fonctionnalités (v0.5)
 
 - **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
+- **Apprentissage des habitudes** (tout est calculé sur le téléphone)
+  - **Routines** : une activité peut se répéter (chaque semaine, en semaine, le week-end, tous les jours) et se crée toute seule les semaines suivantes. Modifier une occurrence demande si le changement vaut aussi pour les prochaines fois ; « Sauter cette fois » ou « Arrêter la routine ».
+  - **Détection automatique** : une activité notée au moins 2 semaines le même jour (une semaine sur deux ou plus, sur les 8 dernières) est proposée comme routine, avec l'heure et la durée habituelles.
+  - **✨ Proposer ma semaine** : remplit les soirées libres (18 h–23 h) et les week-ends (10 h–23 h) avec les idées qui collent le mieux à tes habitudes (jour, moment de la journée, heure habituelle) et à ce qui manque cette semaine (une catégorie habituelle pas encore faite). ✓ pour accepter, ✕ pour refuser ; les refus sont retenus.
+  - **Carte « Aujourd'hui »** : en cours, à suivre, activités passées à cocher, et une idée pour le prochain créneau libre.
+  - **Repas habituels** : dans l'onglet Forme, « Comme d'habitude » refait ton dernier repas du même type en un toucher, et les aliments que tu prends souvent s'ajoutent d'un toucher.
 - **Activités** : banque d'idées, « Planifier », et « Propose-moi une activité » (tirage au sort).
 - **Forme**
   - **Calories** : on tape ses repas comme on parle (« pâtes carbonara, 2 croissants et un coca », « grande assiette de riz poulet »). L'app découpe, reconnaît les plats (base intégrée de ~250 plats et aliments courants, portions habituelles) et additionne. Les quantités (« 2 », « deux ») et tailles (« petit », « grande ») sont prises en compte. Un plat inconnu se complète à la main et est retenu pour la suite, ou peut être confié à **ChatGPT avec ton abonnement** (optionnel, voir plus bas).

@@ -31,7 +31,7 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {} });
+const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} } });
 const withDefaults = d => ({ ...EMPTY_HEALTH(), ...d });
 
 function load() {
@@ -77,6 +77,8 @@ const state = {
   healthDate: toISO(new Date()),
   stepsPending: false,
   weightTip: null,
+  proposals: [],
+  todayDismissed: false,
 };
 
 const view = document.getElementById('view');
@@ -113,6 +115,9 @@ function renderWeek() {
   const end = addDays(start, 6);
   const todayISO = toISO(new Date());
   const isCurrent = toISO(start) === toISO(startOfWeek(new Date()));
+  const isPast = toISO(end) < todayISO;
+  materializeRoutines(start);
+  const proposals = state.proposals.filter(p => p.date >= toISO(start) && p.date <= toISO(end));
 
   const weekEvents = data.events.filter(e => e.date >= toISO(start) && e.date <= toISO(end));
   const totals = {};
@@ -129,6 +134,28 @@ function renderWeek() {
     </div>
     <p class="subtitle">Du ${fmtShort(start)} au ${fmtShort(end)} · ${weekEvents.length} activité${weekEvents.length > 1 ? 's' : ''}</p>`;
 
+  if (isCurrent) html += renderToday();
+
+  const detected = isPast ? null : detectRoutines()[0];
+  if (detected) {
+    html += `
+      <div class="suggestion">
+        <div class="label">🧠 J'ai remarqué une habitude</div>
+        <div class="idea-title" style="margin:4px 0 2px">${esc(detected.title)}</div>
+        <div class="idea-meta" style="margin-bottom:10px">${daysLabel(detected.days)} vers ${detected.start} · ${fmtDuration(toMin(detected.end) - toMin(detected.start))}</div>
+        <div class="row">
+          <button class="secondary" data-action="routine-no" data-key="${esc(detected.key)}">Non merci</button>
+          <button class="primary" data-action="routine-yes" data-key="${esc(detected.key)}">En faire une routine</button>
+        </div>
+      </div>`;
+  }
+
+  if (!isPast) {
+    html += proposals.length
+      ? `<div class="row-buttons"><button class="primary" data-action="props-all">✓ Tout accepter (${proposals.length})</button><button class="secondary" data-action="props-clear">Effacer</button></div>`
+      : '<button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button>';
+  }
+
   const totalEntries = Object.entries(totals);
   if (totalEntries.length) {
     html += `<div class="chips">${totalEntries.map(([c, m]) =>
@@ -138,22 +165,68 @@ function renderWeek() {
   for (let i = 0; i < 7; i++) {
     const d = addDays(start, i);
     const iso = toISO(d);
-    const evs = eventsOn(iso);
+    const items = [...eventsOn(iso), ...proposals.filter(p => p.date === iso).map(p => ({ ...p, proposal: true }))]
+      .sort((a, b) => a.start.localeCompare(b.start));
     html += `
       <section class="day ${iso === todayISO ? 'today' : ''}">
         <div class="day-head">
           <span class="day-title">${fmtDay(d)}</span>
           <button class="day-add" data-action="add" data-date="${iso}" aria-label="Ajouter">+</button>
         </div>
-        ${evs.length ? `<div class="day-list">${evs.map(e => `
+        ${items.length ? `<div class="day-list">${items.map(e => e.proposal ? `
+          <div class="event ghost">
+            <span class="bar" style="background:${cat(e.category).color}"></span>
+            <span class="time">${e.start}<br>${e.end}</span>
+            <span class="grow"><div class="title">✨ ${esc(e.title)}</div><div class="note">Suggestion</div></span>
+            <button class="mini no" data-action="prop-no" data-id="${e.id}" aria-label="Refuser">✕</button>
+            <button class="mini ok" data-action="prop-ok" data-id="${e.id}" aria-label="Accepter">✓</button>
+          </div>` : `
           <button class="event ${e.done ? 'done' : ''}" data-action="edit" data-id="${e.id}">
             <span class="bar" style="background:${cat(e.category).color}"></span>
             <span class="time">${e.start}<br>${e.end}</span>
-            <span><div class="title">${esc(e.title)}</div>${e.notes ? `<div class="note">${esc(e.notes)}</div>` : ''}</span>
+            <span><div class="title">${esc(e.title)}${e.routineId ? ' <span class="routine-icon" title="Routine">↻</span>' : ''}</div>${e.notes ? `<div class="note">${esc(e.notes)}</div>` : ''}</span>
           </button>`).join('')}</div>` : '<div class="empty">Rien de prévu</div>'}
       </section>`;
   }
   view.innerHTML = html;
+}
+
+// Carte « Aujourd'hui » : en cours / à suivre, activités passées à cocher, créneau libre à remplir
+function renderToday() {
+  const iso = toISO(new Date());
+  const now = nowMinutes();
+  const evs = eventsOn(iso);
+  const current = evs.find(e => toMin(e.start) <= now && toMin(e.end) > now);
+  const next = evs.find(e => toMin(e.start) > now);
+  const toCheck = evs.filter(e => toMin(e.end) <= now && !e.done);
+  // Pas de suggestion ici si la semaine proposée couvre déjà aujourd'hui
+  const free = state.todayDismissed || state.proposals.some(p => p.date === iso) ? null : nextFreeSlotToday();
+  if (!current && !next && !toCheck.length && !free) return '';
+  let html = '<div class="card today-card"><div class="label">Aujourd\'hui</div>';
+  if (current) html += `<div class="today-row"><b>En cours</b> · ${esc(current.title)} jusqu'à ${current.end}</div>`;
+  if (next) html += `<div class="today-row"><b>Ensuite</b> · ${esc(next.title)} à ${next.start}</div>`;
+  toCheck.forEach(e => {
+    html += `<div class="today-row check"><span>Fait : ${esc(e.title)} ?</span><button class="mini ok" data-action="mark-done" data-id="${e.id}" aria-label="Fait">✓</button></div>`;
+  });
+  if (free) {
+    html += `<div class="today-row free">
+      <span>Libre ${fromMin(free.slot[0])}–${fromMin(free.slot[1])} · <b>${esc(free.idea.title)}</b> à ${fromMin(free.start)} ?</span>
+      <button class="mini no" data-action="today-no" data-id="${free.idea.id}" aria-label="Non">✕</button>
+      <button class="mini ok" data-action="today-yes" data-id="${free.idea.id}" data-start="${free.start}" aria-label="Ajouter">✓</button>
+    </div>`;
+  }
+  return html + '</div>';
+}
+
+function acceptProposal(p) {
+  const idea = data.ideas.find(i => i.id === p.ideaId);
+  data.events.push({ id: uid(), title: p.title, date: p.date, start: p.start, end: p.end, category: p.category, notes: idea ? idea.notes || '' : '', done: false });
+  state.proposals = state.proposals.filter(x => x.id !== p.id);
+}
+
+function rejectIdea(title) {
+  const k = norm(title);
+  learn().rejected[k] = (learn().rejected[k] || 0) + 1;
 }
 
 // ---------- Onglet Activités ----------
@@ -163,10 +236,15 @@ function plannedThisWeek(title) {
   return data.events.some(ev => ev.title === title && ev.date >= s && ev.date <= e);
 }
 
+// Suggestion selon tes habitudes : tirage parmi les 3 idées les mieux notées pour aujourd'hui
 function suggest() {
-  const pool = data.ideas.filter(i => (state.ideaFilter === 'all' || i.category === state.ideaFilter));
-  const fresh = pool.filter(i => !plannedThisWeek(i.title) && i.id !== state.suggestion);
-  const pick = (fresh.length ? fresh : pool)[Math.floor(Math.random() * (fresh.length || pool.length))];
+  const iso = defaultPlanDate();
+  const pool = data.ideas
+    .filter(i => (state.ideaFilter === 'all' || i.category === state.ideaFilter) && i.id !== state.suggestion)
+    .map(i => ({ i, s: scoreIdea(i, iso, nowMinutes()) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 3);
+  const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)].i : data.ideas.find(i => i.id === state.suggestion);
   state.suggestion = pick ? pick.id : null;
   if (!pick) toast('Ajoute d\'abord des idées d\'activités');
   render();
@@ -240,7 +318,7 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.4</p>`;
+    <p class="help">Ma Semaine · version 0.5</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -248,6 +326,9 @@ function renderSettings() {
 const catOptions = sel => CATEGORIES.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${c.name}</option>`).join('');
 
 function openEventSheet(ev, isNew) {
+  const routine = routineOf(ev);
+  const repeatValue = routine ? routine.repeat : 'none';
+  const origDate = ev.date;
   sheetForm.innerHTML = `
     <div class="sheet-head">
       <button type="button" class="text-btn" data-close>Annuler</button>
@@ -264,12 +345,15 @@ function openEventSheet(ev, isNew) {
     </div>
     <div class="field">
       <label>Catégorie <select name="category">${catOptions(ev.category)}</select></label>
+      <label>Répéter <select name="repeat">${Object.entries(REPEATS).map(([k, v]) => `<option value="${k}" ${k === repeatValue ? 'selected' : ''}>${v}</option>`).join('')}${repeatValue === 'custom' ? `<option value="custom" selected>${daysLabel(routine.days)[0].toUpperCase() + daysLabel(routine.days).slice(1)}</option>` : ''}</select></label>
       ${isNew ? '' : `<label>Fait <input type="checkbox" name="done" ${ev.done ? 'checked' : ''}></label>`}
     </div>
     <div class="field">
       <label><textarea name="notes" placeholder="Notes">${esc(ev.notes)}</textarea></label>
     </div>
-    ${isNew ? '' : '<button type="button" class="danger" data-delete>Supprimer</button>'}`;
+    ${isNew ? '' : routine
+      ? '<div class="row-buttons"><button type="button" class="danger" data-skip>Sauter cette fois</button><button type="button" class="danger" data-stop>Arrêter la routine</button></div>'
+      : '<button type="button" class="danger" data-delete>Supprimer</button>'}`;
 
   sheetForm.onsubmit = e => {
     e.preventDefault();
@@ -282,6 +366,15 @@ function openEventSheet(ev, isNew) {
       category: f.get('category'), notes: f.get('notes').trim(), done: f.get('done') === 'on',
     });
     if (isNew) data.events.push(ev);
+    const repeat = f.get('repeat');
+    if (routine && repeat === repeatValue) {
+      // Occurrence d'une routine modifiée : seulement cette fois, ou aussi les suivantes ?
+      const changed = ['title', 'start', 'end', 'category'].some(k => routine[k] !== ev[k]);
+      if (changed && confirm('Appliquer ce changement aux prochaines fois aussi ?\n(Annuler = seulement cette fois)')) applyRepeat(ev, repeat);
+      else if (ev.date !== origDate && !routine.skips.includes(origDate)) routine.skips.push(origDate);
+    } else {
+      applyRepeat(ev, repeat);
+    }
     save();
     sheet.close();
     state.tab = 'week';
@@ -290,6 +383,11 @@ function openEventSheet(ev, isNew) {
     if (isNew) toast('Ajouté au planning');
   };
   bindSheetButtons(() => { data.events = data.events.filter(x => x.id !== ev.id); });
+  const done = msg => { save(); sheet.close(); render(); toast(msg); };
+  const skip = sheetForm.querySelector('[data-skip]');
+  if (skip) skip.onclick = () => { skipOccurrence(ev); done('Routine sautée cette fois'); };
+  const stop = sheetForm.querySelector('[data-stop]');
+  if (stop) stop.onclick = () => { if (confirm('Arrêter cette routine ? Les prochaines occurrences seront retirées.')) { stopRoutine(ev); done('Routine arrêtée'); } };
   sheet.showModal();
 }
 
@@ -619,6 +717,7 @@ function renderHealth() {
       <label><textarea id="food-text" placeholder="Ex : pâtes carbonara, 2 croissants et un coca"></textarea></label>
       <label>Repas <select id="food-meal">${MEALS.map(m => `<option value="${m.id}" ${m.id === currentMeal() ? 'selected' : ''}>${m.name}</option>`).join('')}</select></label>
     </div>
+    <div id="usual-foods"></div>
     <div class="row-buttons">
       <button class="primary" data-action="add-food" id="add-food-btn">Calculer et ajouter</button>
       ${(data.settings.aiMode || 'off') !== 'off' ? '<button class="secondary" data-action="ask-ai">Demander à ChatGPT</button>' : ''}
@@ -668,6 +767,24 @@ function renderHealth() {
     <button class="secondary" data-action="add-weight">Ajouter une pesée</button>${renderMaintenance()}`;
 
   view.innerHTML = html;
+  const mealSel = document.getElementById('food-meal');
+  renderUsualFoods(mealSel.value);
+  mealSel.onchange = () => renderUsualFoods(mealSel.value);
+}
+
+// Raccourcis « repas habituels » : un toucher pour ajouter ce que tu manges souvent
+function renderUsualFoods(meal) {
+  const box = document.getElementById('usual-foods');
+  if (!box) return;
+  const iso = state.healthDate;
+  const usual = usualFoods(meal, iso);
+  const last = lastMeal(meal, iso);
+  const alreadyLogged = data.food.some(f => f.date === iso && f.meal === meal);
+  if (!usual.length && !last.length) { box.innerHTML = ''; return; }
+  const lastKcal = last.reduce((s, f) => s + (f.kcal || 0), 0);
+  box.innerHTML = `
+    ${last.length && !alreadyLogged ? `<button class="secondary" data-action="repeat-meal" data-meal="${meal}">↺ Comme d'habitude : ${esc(last.map(f => f.name).join(', '))} · ${fmtNum(lastKcal)} kcal</button>` : ''}
+    ${usual.length ? `<div class="chips">${usual.map(f => `<button class="chip selectable" data-action="usual-add" data-id="${f.id}">+ ${esc(f.name)} · ${fmtNum(f.kcal)}</button>`).join('')}</div>` : ''}`;
 }
 
 function renderWeightChart() {
@@ -1106,6 +1223,51 @@ view.addEventListener('click', e => {
     case 'sync-steps': syncSteps(); break;
     case 'paste-steps': pasteSteps(); break;
     case 'edit-steps': editSteps(); break;
+    case 'repeat-meal': {
+      const meal = b.dataset.meal;
+      addItems(lastMeal(meal, state.healthDate).map(({ name, kcal, detail, source }) => ({ name, kcal, detail, source })), meal, state.healthDate);
+      break;
+    }
+    case 'usual-add': {
+      const f = data.food.find(x => x.id === id);
+      if (f) addItems([{ name: f.name, kcal: f.kcal, detail: f.detail, source: f.source }], document.getElementById('food-meal').value, state.healthDate);
+      break;
+    }
+    case 'routine-yes': {
+      const s = detectRoutines().find(x => x.key === b.dataset.key);
+      if (s) { routineFromSuggestion(s); save(); render(); toast(`Routine créée : ${s.title} ${daysLabel(s.days)}`); }
+      break;
+    }
+    case 'routine-no': learn().dismissed[b.dataset.key] = true; save(); render(); break;
+    case 'propose-week':
+      state.proposals = proposeWeek(state.weekStart);
+      render();
+      if (!state.proposals.length) toast('Pas de créneau libre ou d\'idée à proposer cette semaine');
+      break;
+    case 'props-all': {
+      const ws = toISO(state.weekStart), we = toISO(addDays(state.weekStart, 6));
+      state.proposals.filter(p => p.date >= ws && p.date <= we).forEach(acceptProposal);
+      save(); render(); toast('Ajouté au planning');
+      break;
+    }
+    case 'props-clear': state.proposals = []; render(); break;
+    case 'prop-ok': { const p = state.proposals.find(x => x.id === id); if (p) { acceptProposal(p); save(); render(); } break; }
+    case 'prop-no': {
+      const p = state.proposals.find(x => x.id === id);
+      if (p) { rejectIdea(p.title); state.proposals = state.proposals.filter(x => x !== p); save(); render(); }
+      break;
+    }
+    case 'mark-done': { const e = data.events.find(x => x.id === id); if (e) { e.done = true; save(); render(); } break; }
+    case 'today-yes': {
+      const idea = data.ideas.find(i => i.id === id);
+      if (idea) { data.events.push(newEvent(toISO(new Date()), { ...idea, start: fromMin(+b.dataset.start) })); save(); render(); toast('Ajouté à ta journée'); }
+      break;
+    }
+    case 'today-no': {
+      const idea = data.ideas.find(i => i.id === id);
+      if (idea) { rejectIdea(idea.title); state.todayDismissed = true; save(); render(); }
+      break;
+    }
     case 'steps-gist': editStepsGist(); break;
     case 'add-weight': openWeightSheet(); break;
     case 'weight-tip': state.weightTip = b.dataset.date; render(); break;
