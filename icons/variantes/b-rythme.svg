@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E1B4B"/><stop offset="1" stop-color="#0B1026"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".95" r=".7">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity=".45"/><stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bar" x1="0" y1="220" x2="0" y2="790" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB86B"/><stop offset=".45" stop-color="#F472B6"/><stop offset="1" stop-color="#7C6CF6"/>
+    </linearGradient>
+    <filter id="soft" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <g fill="url(#bar)">
+    <rect x="176" y="500" width="72" height="290" rx="36"/>
+    <rect x="276" y="400" width="72" height="390" rx="36"/>
+    <rect x="376" y="460" width="72" height="330" rx="36"/>
+    <rect x="476" y="300" width="72" height="490" rx="36"/>
+    <rect x="576" y="420" width="72" height="370" rx="36"/>
+    <rect x="676" y="250" width="72" height="540" rx="36"/>
+    <rect x="776" y="360" width="72" height="430" rx="36"/>
+  </g>
+  <circle cx="712" cy="160" r="46" fill="#FFD27A" filter="url(#soft)" opacity=".8"/>
+  <circle cx="712" cy="160" r="34" fill="#FFE3A3"/>
+</svg>
