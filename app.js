@@ -325,15 +325,15 @@ function renderSettings() {
     <button class="secondary" data-action="steps-gist">${data.settings.stepsGist ? 'Synchro automatique activée · modifier' : 'Activer la synchro automatique'}</button>
     <p class="help">Une automatisation iPhone envoie tes pas plusieurs fois par jour ; l'app les récupère toute seule à l'ouverture. Mise en route dans le README.</p>
     <div class="section-title">Recherche des calories</div>
-    <button class="secondary" data-action="ai-mode">ChatGPT : ${AI_MODES[data.settings.aiMode || 'off']}</button>
-    <p class="help">L'app utilise d'abord sa base intégrée. Si un plat est inconnu, elle peut demander à ChatGPT avec ton abonnement (via l'app ChatGPT), puis tu recolles la réponse.</p>
+    <button class="secondary" data-action="ai-mode">Recherche IA : ${AI_MODES[aiMode()]}</button>
+    <p class="help">Avec Gemini, chaque repas tapé est analysé automatiquement par l'IA (gratuit, clé à créer une fois). Sans IA, l'app utilise sa base intégrée de plats courants.</p>
     <div class="section-title">Sauvegarde</div>
     <button class="secondary" data-action="export">Exporter mes données</button>
     <button class="secondary" data-action="import">Importer une sauvegarde</button>
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.7</p>`;
+    <p class="help">Ma Semaine · version 0.8</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -481,7 +481,9 @@ function defaultPlanDate() {
 // ---------- Sauvegarde ----------
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  // La clé IA n'est pas exportée : la sauvegarde peut être partagée ou stockée ailleurs
+  const copy = { ...data, settings: { ...data.settings, geminiKey: undefined } };
+  const blob = new Blob([JSON.stringify(copy, null, 2)], { type: 'application/json' });
   const file = new File([blob], `ma-semaine-${toISO(new Date())}.json`, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     navigator.share({ files: [file], title: 'Sauvegarde Ma Semaine' }).catch(() => {});
@@ -737,7 +739,7 @@ function renderHealth() {
     <div id="usual-foods"></div>
     <div class="row-buttons">
       <button class="primary" data-action="add-food" id="add-food-btn">Calculer et ajouter</button>
-      ${(data.settings.aiMode || 'off') !== 'off' ? '<button class="secondary" data-action="ask-ai">Demander à ChatGPT</button>' : ''}
+      ${isChatGPTMode() ? '<button class="secondary" data-action="ask-ai">Demander à ChatGPT</button>' : ''}
     </div>`;
 
   const pending = data.settings.pendingAI;
@@ -839,21 +841,69 @@ function renderWeightChart() {
 
 // --- Repas ---
 
-const AI_MODES = { off: 'désactivé', shortcut: 'via le raccourci', web: 'via le site' };
+const AI_MODES = {
+  gemini: 'Gemini (automatique, gratuit)',
+  shortcut: 'ChatGPT via le raccourci',
+  web: 'ChatGPT via le site',
+  off: 'désactivée',
+};
+const aiMode = () => data.settings.aiMode || 'off';
+const isChatGPTMode = () => ['shortcut', 'web'].includes(aiMode());
 
-// Base intégrée d'abord ; si un plat est inconnu (ou sur demande), on passe la main à ChatGPT
-function addFood(forceAI = false) {
+// Recherche IA automatique (Gemini) : un repas déjà analysé est repris du cache, sans nouvel appel
+async function estimateWithAI(text) {
+  const key = norm(text);
+  const cache = (learn().aiCache ||= {});
+  if (cache[key]) return cache[key].map(i => ({ ...i }));
+  if (!data.settings.geminiModel) {
+    data.settings.geminiModel = await pickGeminiModel(data.settings.geminiKey);
+  }
+  let items;
+  try {
+    items = await estimateGemini(text, data.settings.geminiKey, data.settings.geminiModel);
+  } catch (e) {
+    // Modèle retiré entre-temps : on en choisit un autre et on réessaie une fois
+    if (!/introuvable|not found|not supported/i.test(e.message)) throw e;
+    data.settings.geminiModel = await pickGeminiModel(data.settings.geminiKey);
+    items = await estimateGemini(text, data.settings.geminiKey, data.settings.geminiModel);
+  }
+  const keys = Object.keys(cache);
+  if (keys.length > 300) delete cache[keys[0]];
+  cache[key] = items;
+  return items;
+}
+
+// Gemini : tout le repas est analysé automatiquement par l'IA (base intégrée si hors connexion ou en cas d'erreur).
+// ChatGPT : base intégrée d'abord ; si un plat est inconnu (ou sur demande), on passe la main à ChatGPT.
+async function addFood(forceAI = false) {
   const textEl = document.getElementById('food-text');
   const text = textEl.value.trim();
   if (!text) { textEl.focus(); return; }
   const meal = document.getElementById('food-meal').value;
+  const date = state.healthDate;
+  let aiError = null;
+  if (aiMode() === 'gemini' && data.settings.geminiKey) {
+    if (!navigator.onLine) aiError = 'hors connexion';
+    else {
+      const btn = document.getElementById('add-food-btn');
+      btn.disabled = true;
+      btn.textContent = 'Recherche IA…';
+      try {
+        addItems(await estimateWithAI(text), meal, date);
+        return;
+      } catch (e) {
+        aiError = e.message;
+      }
+    }
+  }
   const items = estimateLocal(text, data.customFoods);
   const unknown = items.filter(i => i.kcal === null).length;
-  if ((forceAI || unknown) && (data.settings.aiMode || 'off') !== 'off') {
+  if ((forceAI || unknown) && isChatGPTMode()) {
     askChatGPT(text, meal);
     return;
   }
-  addItems(items, meal, state.healthDate);
+  addItems(items, meal, date);
+  if (aiError) toast(`IA indisponible (${aiError}) : base intégrée utilisée`);
 }
 
 function addItems(items, meal, date) {
@@ -901,22 +951,44 @@ function cancelChatGPT(useLocal) {
 }
 
 function openAiSheet() {
-  const mode = data.settings.aiMode || 'off';
+  const mode = aiMode();
   sheetForm.innerHTML = `
     <div class="sheet-head">
       <button type="button" class="text-btn" data-close>Annuler</button>
-      <h2>ChatGPT</h2>
+      <h2>Recherche IA</h2>
       <button type="submit" class="text-btn">OK</button>
     </div>
     <div class="field">
-      <label>Utiliser ChatGPT <select name="mode">${Object.entries(AI_MODES).map(([k, v]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${v[0].toUpperCase() + v.slice(1)}</option>`).join('')}</select></label>
+      <label>Utiliser <select name="mode">${Object.entries(AI_MODES).map(([k, v]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>Clé Gemini <input type="password" name="key" value="${esc(data.settings.geminiKey || '')}" placeholder="AIza…" autocomplete="off"></label>
     </div>
-    <p class="help"><b>Via le raccourci</b> (conseillé) : le raccourci « ${CHATGPT_SHORTCUT} » interroge l'app ChatGPT et copie la réponse ; à créer une fois (voir le README).<br>
-    <b>Via le site</b> : ouvre ChatGPT avec la question déjà écrite ; copie la réponse puis reviens.<br>
-    Dans les deux cas, c'est ton abonnement qui est utilisé, sans frais en plus.</p>`;
-  sheetForm.onsubmit = e => {
+    <div class="card help-steps">
+      <p><b>Gemini (conseillé)</b> : tu tapes ton repas, l'IA calcule tout de suite, rien à copier. Gratuit dans la limite de l'offre de Google, largement suffisante pour tes repas.</p>
+      <p>Clé à créer une fois : ouvre <b>aistudio.google.com/apikey</b> avec ton compte Google → <b>Create API key</b> → copie-la ici. Elle reste sur ton téléphone (et n'est pas incluse dans les sauvegardes exportées).</p>
+      <p>Avec l'offre gratuite, Google peut utiliser les textes envoyés (ici, tes repas) pour améliorer ses services.</p>
+      <p><b>ChatGPT</b> : passe par ton abonnement via l'app ChatGPT, mais il faut revenir et coller la réponse.</p>
+    </div>`;
+  sheetForm.onsubmit = async e => {
     e.preventDefault();
-    data.settings.aiMode = new FormData(sheetForm).get('mode');
+    const f = new FormData(sheetForm);
+    const newMode = f.get('mode');
+    const key = String(f.get('key') || '').trim();
+    if (newMode === 'gemini') {
+      if (!key) { toast('Colle d\'abord ta clé Gemini'); return; }
+      const ok = sheetForm.querySelector('[type=submit]');
+      ok.textContent = '…';
+      try {
+        data.settings.geminiModel = await pickGeminiModel(key); // vérifie la clé
+      } catch (err) {
+        ok.textContent = 'OK';
+        toast(`Clé Gemini : ${err.message}`);
+        return;
+      }
+      toast('Recherche IA activée');
+    }
+    if (key !== data.settings.geminiKey) learn().aiCache = {};
+    data.settings.geminiKey = key || undefined;
+    data.settings.aiMode = newMode;
     save();
     sheet.close();
     render();

@@ -4,7 +4,7 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.7)
+## Fonctionnalités (v0.8)
 
 **Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
 
@@ -23,12 +23,12 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
   - **✨ Planifier mes sessions** : devoirs d'abord, puis projets, puis loisirs ; 2 activités max par soir de semaine (plus la lecture), 3 le week-end.
 - **Activités** : banque d'idées, « Planifier », et « Propose-moi une activité » (tirage au sort).
 - **Forme**
-  - **Calories** : on tape ses repas comme on parle (« pâtes carbonara, 2 croissants et un coca », « grande assiette de riz poulet »). L'app découpe, reconnaît les plats (base intégrée de ~250 plats et aliments courants, portions habituelles) et additionne. Les quantités (« 2 », « deux ») et tailles (« petit », « grande ») sont prises en compte. Un plat inconnu se complète à la main et est retenu pour la suite, ou peut être confié à **ChatGPT avec ton abonnement** (optionnel, voir plus bas).
+  - **Calories** : on tape ses repas comme on parle (« pâtes carbonara, 2 croissants et un coca », « grande assiette de riz poulet »). L'app découpe, reconnaît les plats (base intégrée de ~250 plats et aliments courants, portions habituelles) et additionne. Les quantités (« 2 », « deux ») et tailles (« petit », « grande ») sont prises en compte. Un plat inconnu se complète à la main et est retenu pour la suite, ou, avec la **recherche IA Gemini** (gratuite, voir plus bas), tout repas est analysé automatiquement par l'IA.
   - **Pas** : synchro automatique avec l'app Santé (automatisation iOS + gist secret), ou import manuel ; conversion en calories dépensées.
   - **Objectif du jour** : métabolisme de base (selon profil et dernière pesée) + pas, ajusté selon l'objectif (perdre / maintenir / prendre).
   - **Maintien calorique automatique** : recalculé à chaque pesée hebdomadaire à partir de ce que tu as réellement mangé et de l'évolution de ton poids sur les 4 dernières semaines (moyenne des kcal notées − variation du poids × 7 700 kcal/kg). Il remplace la formule théorique dans l'objectif du jour dès qu'il y a 2 pesées et 5 jours de repas notés, et devient « fiable » après 3 pesées et 2 semaines notées. Détail semaine par semaine.
   - **Poids** : une pesée par semaine, courbe d'évolution, rappel le dimanche par notification.
-- **Réglages** : profil, notifications, ChatGPT, export / import.
+- **Réglages** : préférences, profil, notifications, pas, recherche IA, export / import.
 
 ## Installer sur l'iPhone
 
@@ -105,21 +105,22 @@ Une GitHub Action (`.github/workflows/rappel-pesee.yml`) envoie chaque dimanche 
 
 Si l'app est réinstallée, refaire les étapes 2–3. Sans activité sur le dépôt pendant 60 jours, GitHub suspend les tâches planifiées : il suffit de les réactiver dans l'onglet Actions.
 
-## ChatGPT pour les plats inconnus (optionnel, avec l'abonnement)
+## Recherche IA automatique des calories (Gemini, gratuit)
 
-L'abonnement ChatGPT (Plus) ne donne pas accès à l'API d'OpenAI, qui est payante à part. L'app passe donc par **l'app ChatGPT** : c'est ton abonnement qui est utilisé, sans frais en plus.
+Avec une clé Google Gemini, chaque repas tapé (« un bibimbap et du kimchi », « grande assiette de pâtes carbonara ») est analysé directement par l'IA : découpage en aliments, portions, calories. Rien à copier ni à coller.
 
-Fonctionnement : quand la base intégrée ne reconnaît pas un plat (ou avec le bouton **Demander à ChatGPT**), l'app envoie la question à ChatGPT. Copie la réponse si besoin, reviens dans l'app et touche **Coller la réponse de ChatGPT**. Les plats et leurs calories sont ajoutés automatiquement.
+1. Ouvrir **aistudio.google.com/apikey** avec un compte Google → **Create API key** → copier la clé (`AIza…`).
+2. Dans l'app : Réglages → **Recherche IA** → *Gemini (automatique, gratuit)* → coller la clé → OK (elle est vérifiée). Elle peut aussi être donnée dans le questionnaire de bienvenue.
 
-À choisir dans Réglages → **ChatGPT** :
+- L'app choisit toute seule le modèle Gemini « flash » le plus récent disponible pour la clé.
+- Un repas déjà analysé est repris du cache, sans nouvel appel.
+- Hors connexion, limite gratuite atteinte ou erreur : la base intégrée prend le relais et l'app le signale.
+- La clé reste sur le téléphone et n'est pas incluse dans les sauvegardes exportées.
+- Avec l'offre gratuite, Google peut utiliser les textes envoyés (ici, la description des repas) pour améliorer ses services.
 
-- **Via le raccourci** (conseillé, plus rapide). Dans l'app **Raccourcis**, créer un raccourci nommé exactement **`Calories ChatGPT`** :
-  1. Dans les détails du raccourci (ⓘ), vérifier que l'entrée du raccourci accepte du **Texte**.
-  2. Action **Demander à ChatGPT** (fournie par l'app ChatGPT, connectée à ton compte) : message = *Entrée du raccourci*. Désactiver *Ouvrir dans l'app* pour récupérer la réponse directement.
-  3. Action **Copier dans le presse-papiers** (*Réponse*).
-- **Via le site** : ouvre chatgpt.com avec la question déjà écrite. Copier la réponse, puis revenir dans l'app.
+### Alternative : ChatGPT avec l'abonnement (manuel)
 
-ChatGPT répond au format `nom | portion | kcal` ; l'app comprend aussi un tableau ou une liste. Si la réponse n'est pas reconnue, **Base intégrée** utilise l'estimation locale à la place.
+L'abonnement ChatGPT ne donne pas accès à l'API d'OpenAI (payante à part). Les modes *ChatGPT via le raccourci* et *ChatGPT via le site* passent par l'app ChatGPT : il faut revenir dans l'app et toucher **Coller la réponse de ChatGPT**. Raccourci `Calories ChatGPT` : entrée du raccourci en **Texte** → **Demander à ChatGPT** (message = *Entrée du raccourci*, *Ouvrir dans l'app* désactivé) → **Copier dans le presse-papiers**.
 
 ## Développement
 

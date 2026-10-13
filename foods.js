@@ -408,3 +408,73 @@ function parseChatGPT(answer) {
   });
   return items;
 }
+
+// ---------- Recherche IA automatique : Google Gemini (offre gratuite) ----------
+// Appel direct depuis le téléphone avec la clé de l'utilisateur (aistudio.google.com/apikey).
+// Le modèle est choisi automatiquement parmi ceux disponibles pour la clé (le plus récent « flash »),
+// pour ne pas dépendre d'un nom de modèle qui change avec le temps.
+
+const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta';
+
+async function geminiFetch(path, key, body) {
+  const res = await fetch(`${GEMINI_API}/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = (err.error && err.error.message) || '';
+    if (res.status === 429) throw new Error('limite gratuite atteinte, réessaie dans une minute');
+    if (res.status === 400 && /api key/i.test(msg)) throw new Error('clé invalide');
+    if (res.status === 403) throw new Error('clé refusée ou service indisponible');
+    throw new Error(msg || `erreur ${res.status}`);
+  }
+  return res.json();
+}
+
+// Le plus récent modèle « flash » stable qui sait générer du texte
+async function pickGeminiModel(key) {
+  const list = await geminiFetch('models?pageSize=200', key);
+  const usable = (list.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')
+    && /gemini/.test(m.name) && !/(image|tts|audio|live|embedding|vision|exp|preview|thinking)/.test(m.name));
+  const version = n => parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1]);
+  const rank = m => [/flash$/.test(m.name) ? 2 : /flash/.test(m.name) && !/lite/.test(m.name) ? 1 : 0, version(m.name)];
+  usable.sort((a, b) => { const [x1, x2] = rank(a), [y1, y2] = rank(b); return y1 - x1 || y2 - x2; });
+  if (!usable.length) throw new Error('aucun modèle Gemini disponible pour cette clé');
+  return usable[0].name.replace(/^models\//, '');
+}
+
+async function estimateGemini(text, key, model) {
+  const body = {
+    systemInstruction: { parts: [{ text:
+      'Tu estimes les calories de repas décrits de façon approximative par un utilisateur français. ' +
+      'Découpe la description en aliments ou plats ; si les quantités ne sont pas précisées, suppose des portions habituelles en France ; ' +
+      'tiens compte des quantités et tailles indiquées (petit, grand, 2…). Noms et portions en français, courts. kcal = total pour la portion décrite.' }] },
+    contents: [{ role: 'user', parts: [{ text }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          items: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: { name: { type: 'STRING' }, portion: { type: 'STRING' }, kcal: { type: 'INTEGER' } },
+              required: ['name', 'portion', 'kcal'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+    },
+  };
+  const res = await geminiFetch(`models/${model}:generateContent`, key, body);
+  const part = res.candidates && res.candidates[0] && res.candidates[0].content && res.candidates[0].content.parts.find(p => p.text);
+  if (!part) throw new Error('réponse vide');
+  const items = JSON.parse(part.text).items || [];
+  if (!items.length) throw new Error('aucun aliment reconnu');
+  return items.map(i => ({ name: i.name, kcal: Math.max(0, Math.round(i.kcal)), detail: `${i.portion} · estimation IA`, source: 'ia' }));
+}
