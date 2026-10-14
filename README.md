@@ -4,7 +4,7 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v0.9)
+## Fonctionnalités (v1.0)
 
 **Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles, **ta semaine décrite librement en quelques phrases** (travail, alternance, cours, horaires, sport, habitudes : analysée par l'IA Gemini si une clé est donnée, sinon par un analyseur intégré ; les activités régulières deviennent des routines bloquées dans le planning et les étapes suivantes sont pré-remplies) (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
 
@@ -28,6 +28,7 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
   - **Objectif du jour** : métabolisme de base (selon profil et dernière pesée) + pas, ajusté selon l'objectif (perdre / maintenir / prendre).
   - **Maintien calorique automatique** : recalculé à chaque pesée hebdomadaire à partir de ce que tu as réellement mangé et de l'évolution de ton poids sur les 4 dernières semaines (moyenne des kcal notées − variation du poids × 7 700 kcal/kg). Il remplace la formule théorique dans l'objectif du jour dès qu'il y a 2 pesées et 5 jours de repas notés, et devient « fiable » après 3 pesées et 2 semaines notées. Détail semaine par semaine.
   - **Poids** : une pesée par semaine, courbe d'évolution, rappel le dimanche par notification.
+- **Compte** : connexion par e-mail, données synchronisées entre appareils (voir plus bas).
 - **Réglages** : préférences, profil, notifications, pas, recherche IA, export / import.
 
 ## Installer sur l'iPhone
@@ -42,6 +43,19 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
 L'app installée se met à jour toute seule quand on l'ouvre (Réglages → **Vérifier les mises à jour** pour forcer).
 **Ne pas supprimer l'icône de l'écran d'accueil** pour mettre à jour : iOS efface alors toutes les données de l'app (historique, réglages, clé Gemini).
 Safari et l'app installée n'ont pas les mêmes données : toujours ouvrir l'app depuis son icône. Penser à **Exporter mes données** de temps en temps (la clé Gemini peut être incluse) ; **Importer une sauvegarde** restaure tout.
+## Comptes et synchronisation (Supabase)
+
+Avec un compte (e-mail + mot de passe), les données sont sauvegardées en ligne et retrouvées sur tous les appareils : iPhone, ordinateur (même adresse, dans n'importe quel navigateur), nouveau téléphone. L'app garde une copie sur l'appareil et marche hors connexion ; les changements sont envoyés dès que possible et récupérés à chaque ouverture. Sans configuration, l'app fonctionne sans compte, comme avant. « Continuer sans compte » reste possible ; on peut se connecter plus tard (Réglages → Compte), les données de l'appareil sont alors rattachées au compte.
+
+Mise en place (une seule fois) :
+1. Créer un compte gratuit sur **supabase.com** → **New project** (région Europe, mot de passe de base au choix).
+2. **SQL Editor** → **New query** → coller le contenu de `supabase/schema.sql` → **Run**. Cela crée la table des données avec les règles de sécurité : chaque utilisateur ne peut lire et modifier que ses propres données.
+3. **Authentication** → **Sign In / Providers** → **Email** : laisser activé. Pour se connecter tout de suite après l'inscription, désactiver **Confirm email** (sinon un lien de confirmation est envoyé par e-mail).
+4. **Authentication** → **URL Configuration** → **Site URL** : `https://mehdi1420.github.io/test/` (pour les liens « mot de passe oublié »).
+5. **Project Settings** → **API Keys** (ou **Data API**) : copier l'**URL du projet** et la **clé publique** (*publishable* ou *anon*), puis les mettre dans `config.js`.
+
+La clé publique est faite pour être visible dans le code d'un site : la sécurité repose sur les règles de la base (étape 2). Ne jamais mettre la clé *secret* / *service_role* dans l'app.
+
 ## Synchroniser les pas avec Santé (une seule fois)
 
 Une web app ne peut pas lire l'app Santé directement : un raccourci iOS sert de passerelle. Deux modes possibles.
