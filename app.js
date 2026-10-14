@@ -33,19 +33,22 @@ function uid() {
 }
 
 const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} }, tasks: [], projects: [], books: [] });
-const withDefaults = d => ({ ...EMPTY_HEALTH(), ...d });
+const withDefaults = d => ({ ...EMPTY_HEALTH(), meta: {}, ...d });
 
 function load() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKeyFor(getSession()));
     if (raw) return withDefaults(JSON.parse(raw));
   } catch (e) { /* données illisibles : on repart de zéro */ }
   return withDefaults({ events: [], ideas: DEFAULT_IDEAS.map(i => ({ id: uid(), notes: '', ...i })) });
 }
 
 let data = load();
+// Enregistre sur l'appareil, puis (avec un compte) envoie au serveur quelques instants plus tard
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  data.meta = { ...(data.meta || {}), updatedAt: Date.now() };
+  localStorage.setItem(storageKeyFor(getSession()), JSON.stringify(data));
+  cloudSchedulePush();
 }
 
 // ---------- Dates (toujours en heure locale) ----------
@@ -328,10 +331,28 @@ function renderIdeas() {
 
 // ---------- Onglet Réglages ----------
 
+function renderAccount() {
+  if (!cloudEnabled()) return '';
+  const s = getSession();
+  if (!s) {
+    return `<div class="section-title">Compte</div>
+      <button class="primary" data-action="login">Se connecter / créer un compte</button>
+      <p class="help">Avec un compte, tes données sont sauvegardées en ligne et retrouvées sur tous tes appareils (iPhone, ordinateur…).</p>`;
+  }
+  const pending = data.meta && data.meta.updatedAt !== data.meta.syncedAt;
+  const status = cloudState.error ? `⚠️ ${esc(cloudState.error)}`
+    : pending ? '⏳ Modifications en cours d\'envoi…'
+    : `✓ Synchronisé${cloudState.lastSync ? ` ${fmtAgo(new Date(cloudState.lastSync).toISOString())}` : ''}`;
+  return `<div class="section-title">Compte</div>
+    <div class="card"><div class="idea-title">${esc(s.user.email)}</div><div class="idea-meta">${status}</div></div>
+    <div class="row-buttons"><button class="secondary" data-action="sync-now">Synchroniser</button><button class="secondary" data-action="logout">Se déconnecter</button></div>`;
+}
+
 function renderSettings() {
   const p = data.profile;
   view.innerHTML = `
     <div class="header"><h1>Réglages</h1></div>
+    ${renderAccount()}
     <div class="section-title">Mes préférences</div>
     <button class="secondary" data-action="life-describe">Décrire ma semaine type</button>
     <button class="secondary" data-action="onboarding">Refaire le questionnaire (goûts, horaires, modules)</button>
@@ -355,7 +376,8 @@ function renderSettings() {
     <p class="help">Tes données restent sur ton iPhone. Exporte de temps en temps pour garder une copie.</p>
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
-    <p class="help">Ma Semaine · version 0.9</p>`;
+    ${cloudEnabled() && getSession() ? '<button class="danger" data-action="delete-cloud" style="margin-top:10px">Supprimer mes données du serveur</button>' : ''}
+    <p class="help">Ma Semaine · version 1.0</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -1406,6 +1428,18 @@ view.addEventListener('click', e => {
     case 'books-chatgpt': booksChatGPT(); break;
     case 'moodle-help': openMoodleHelp(); break;
     case 'onboarding': startOnboarding(); break;
+    case 'login': showAuth('login'); break;
+    case 'logout':
+      if (confirm('Se déconnecter ? Tes données restent sur ton compte et seront retirées de cet appareil.')) {
+        signOut().then(() => { data = load(); showAuth('login'); });
+      }
+      break;
+    case 'sync-now': cloudPush().then(() => refreshFromCloud()).then(() => { render(); toast(cloudState.error ? `Synchro impossible : ${cloudState.error}` : 'Synchronisé ✓'); }); break;
+    case 'delete-cloud':
+      if (confirm('Supprimer toutes tes données du serveur ? Elles restent sur cet appareil jusqu\'à la déconnexion.')) {
+        deleteCloudData().then(() => { toast('Données supprimées du serveur'); signOut().then(() => { data = load(); showAuth('login'); }); }).catch(err => toast(err.message));
+      }
+      break;
     case 'check-updates': checkUpdates(); break;
     case 'safari-ok': state.safariDismissed = true; render(); break;
     case 'life-describe': startOnboarding('life'); break;
@@ -1434,7 +1468,7 @@ view.addEventListener('click', e => {
     case 'import': importData(); break;
     case 'reset':
       if (confirm('Effacer toutes les activités et idées ? Cette action est définitive.')) {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(storageKeyFor(getSession()));
         data = load();
         render();
       }
@@ -1476,6 +1510,7 @@ const isStandalone = window.navigator.standalone === true || matchMedia('(displa
 // Retour dans l'app (après le raccourci Santé par exemple)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  if (getSession()) refreshFromCloud();
   if (state.tab === 'health' && !sheet.open) render();
   // Retour après « Synchroniser » : le raccourci vient d'envoyer les pas, on relit tout de suite
   fetchStepsFromGist(state.stepsPending);
@@ -1490,5 +1525,18 @@ if (new URLSearchParams(location.search).has('pesee')) {
 } else {
   render();
 }
-fetchStepsFromGist(true);
-if (!data.settings.onboarded) startOnboarding();
+// Démarrage : écran de connexion (si les comptes sont activés et qu'on n'a pas choisi « sans compte »),
+// sinon questionnaire au premier lancement ; avec un compte, on récupère la dernière version du serveur.
+if (cloudEnabled() && !getSession() && !localStorage.getItem(GUEST_KEY)) {
+  showAuth();
+} else {
+  fetchStepsFromGist(true);
+  if (!data.settings.onboarded) startOnboarding();
+  if (getSession()) refreshFromCloud();
+}
+
+async function refreshFromCloud() {
+  const changed = await cloudPull();
+  if (cloudState.expired) { showAuth('login', 'Ta session a expiré : reconnecte-toi.'); return; }
+  if (changed && !sheet.open && !document.getElementById('onboarding')) render();
+}
