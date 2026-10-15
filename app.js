@@ -257,7 +257,7 @@ function renderWeek() {
   if (!isPast) {
     html += proposals.length
       ? `<div class="row-buttons"><button class="primary" data-action="props-all">✓ Tout accepter (${proposals.length})</button><button class="secondary" data-action="props-clear">Effacer</button></div>`
-      : '<div class="row-buttons week-actions"><button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button><button class="secondary" data-action="tell-weekly">💬 Un changement ?</button></div>';
+      : '<div class="row-buttons week-actions"><button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button><button class="secondary" data-action="tell-weekly">💬 Un changement&nbsp;?</button></div>';
   }
 
   const totalEntries = Object.entries(totals);
@@ -1796,6 +1796,50 @@ document.addEventListener('visibilitychange', () => {
   // Retour après « Synchroniser » : le raccourci vient d'envoyer les pas, on relit tout de suite
   fetchStepsFromGist(state.stepsPending);
 });
+
+// ---------- Clavier de l'iPhone ----------
+// Dans une app web, iOS fait glisser toute la page quand le clavier s'ouvre et laisse la barre
+// d'onglets flotter au-dessus. On mesure la zone réellement visible (visualViewport) pour : cacher
+// la barre d'onglets, poser les fenêtres et le questionnaire juste au-dessus du clavier, et
+// remettre la page en place quand il se ferme.
+(function keyboardWatch() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement;
+  let full = vv.height;
+  let open = false;
+  const typing = () => /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')
+    && !/^(checkbox|radio|button|submit|range|color|file)$/.test(document.activeElement.type);
+  const update = () => {
+    if (!typing()) full = Math.max(full, vv.height);
+    root.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+    root.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
+    const isOpen = typing() && vv.height < full - 120;
+    if (isOpen === open) return;
+    open = isOpen;
+    document.body.classList.toggle('kb-open', open);
+    if (open) {
+      // Le champ touché reste visible au-dessus du clavier
+      setTimeout(() => { const a = document.activeElement; if (a && a.scrollIntoView) a.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
+    } else {
+      window.scrollTo(window.scrollX, window.scrollY); // iOS laisse parfois la page décalée
+    }
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  window.addEventListener('orientationchange', () => { full = 0; setTimeout(update, 300); });
+  document.addEventListener('focusin', e => {
+    // Touche « OK » du clavier sur les champs d'une ligne (sauf ceux qui ont déjà la leur)
+    if (e.target.tagName === 'INPUT' && !e.target.hasAttribute('enterkeyhint')) e.target.setAttribute('enterkeyhint', e.target.form ? 'go' : 'done');
+    setTimeout(update, 80);
+  });
+  // Hors formulaire (questionnaire), « OK » ferme simplement le clavier
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !e.target.form) e.target.blur();
+  });
+  document.addEventListener('focusout', () => setTimeout(update, 80));
+  update();
+})();
 
 // Ouverture depuis la notification du dimanche
 if (new URLSearchParams(location.search).has('preparer')) {
