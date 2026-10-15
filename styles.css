@@ -530,3 +530,6 @@ main .header h1 { font-size: clamp(25px, 7.4vw, 34px); }
 .field label.free > span { font-weight: 600; font-size: 15px; }
 .field label.free textarea { text-align: left; min-height: 0; font-size: 16px; line-height: 1.4; }
 .more-chip { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--sec) 45%, var(--line)); color: var(--accent); font-weight: 600; }
+
+/* Choix suggérés par l'IA : pas cochés, juste mis en avant */
+.chip.suggested { border: 1.5px dashed color-mix(in srgb, var(--sec) 55%, transparent); background: color-mix(in srgb, var(--sec) 8%, var(--card)); }

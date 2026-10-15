@@ -238,17 +238,17 @@ function applyLifeToOnboarding(res) {
   // Libre en semaine : après la fin du travail ou des cours (le plus tard en semaine) + 30 min
   const ends = res.routines.filter(r => ['travail', 'etudes'].includes(r.category) && r.days.some(d => d < 5)).map(r => toMin(r.end));
   if (ends.length && !mine('eveningStart')) p.eveningStart = fromMin(Math.min(21 * 60, Math.ceil((Math.max(...ends) + 30) / 15) * 15));
-  p.sports = [...new Set([...p.sports, ...res.sports])];
-  const other = [...new Set([...(p.otherSport ? p.otherSport.split(/,\s*/) : []), ...(res.otherSports || [])])].filter(Boolean);
-  p.otherSport = other.join(', ');
   if (res.sportPerWeek && !mine('sportPerWeek')) p.sportPerWeek = res.sportPerWeek;
-  p.interests = [...new Set([...p.interests, ...res.interests])];
-  const oi = [...new Set([...(p.otherInterest ? p.otherInterest.split(/,\s*/) : []), ...(res.otherInterests || [])])].filter(Boolean);
-  p.otherInterest = oi.join(', ');
-  p.goals = [...new Set([...p.goals, ...res.goals])];
-  if (res.language) p.language = res.language;
-  if (res.certName) p.certName = res.certName;
-  if ((res.goals.length || res.routines.some(r => r.category === 'etudes')) && !mine('modules')) p.modules.goals = true;
+  if (res.language && !p.language) p.language = res.language;
+  if (res.certName && !p.certName) p.certName = res.certName;
+  // Sports, centres d'intérêt et objectifs repérés : seulement SUGGÉRÉS (✨), jamais cochés à la place
+  // de l'utilisateur. Ceux qui ne sont pas dans le catalogue deviennent des choix « free:Titre ».
+  const free = list => (list || []).filter(Boolean).map(t => `free:${t[0].toUpperCase()}${t.slice(1)}`);
+  ob.suggested = {
+    sports: [...res.sports, ...free(res.otherSports)].filter(id => !p.sports.includes(id)),
+    interests: [...res.interests, ...free(res.otherInterests)].filter(id => !p.interests.includes(id)),
+    goals: res.goals.filter(id => !p.goals.includes(id)),
+  };
 }
 
 // ---------- Réponses libres du questionnaire (sports, centres d'intérêt, objectifs, lectures) ----------
