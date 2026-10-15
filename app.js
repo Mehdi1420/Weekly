@@ -1719,7 +1719,12 @@ if (new URLSearchParams(location.search).has('pesee')) {
 }
 // Démarrage : écran de connexion (si les comptes sont activés et qu'on n'a pas choisi « sans compte »),
 // sinon questionnaire au premier lancement ; avec un compte, on récupère la dernière version du serveur.
-if (cloudEnabled() && !getSession() && !localStorage.getItem(GUEST_KEY)) {
+const authRedirect = cloudEnabled() ? readAuthRedirect() : null;
+if (authRedirect?.mode === 'reset') {
+  showAuth('reset');
+} else if (authRedirect?.error) {
+  showAuth('forgot', authRedirect.error);
+} else if (cloudEnabled() && !getSession() && !localStorage.getItem(GUEST_KEY)) {
   showAuth();
 } else {
   fetchStepsFromGist(true);

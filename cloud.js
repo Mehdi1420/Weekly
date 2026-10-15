@@ -35,6 +35,9 @@ const authErrors = {
   email_not_confirmed: 'Confirme d\'abord ton e-mail (lien reçu par mail), puis connecte-toi',
   'Email not confirmed': 'Confirme d\'abord ton e-mail (lien reçu par mail), puis connecte-toi',
   weak_password: 'Mot de passe trop faible (8 caractères minimum)',
+  same_password: 'Choisis un mot de passe différent de l\'ancien',
+  'New password should be different from the old password.': 'Choisis un mot de passe différent de l\'ancien',
+  bad_jwt: 'Ce lien a expiré : redemande un e-mail',
   over_email_send_rate_limit: 'Trop d\'e-mails envoyés, réessaie dans quelques minutes',
 };
 
@@ -197,8 +200,36 @@ async function signOut() {
   setSession(null);
 }
 
+// Le lien de l'e-mail ramène sur l'app, qui propose alors de choisir un nouveau mot de passe
 async function resetPassword(email) {
-  await supa('/auth/v1/recover', { method: 'POST', body: { email } });
+  const back = encodeURIComponent(location.origin + location.pathname);
+  await supa(`/auth/v1/recover?redirect_to=${back}`, { method: 'POST', body: { email } });
+}
+
+// Retour depuis le lien « mot de passe oublié » : Supabase met les jetons dans l'adresse (#access_token=…&type=recovery)
+let pendingRecovery = null;
+function readAuthRedirect() {
+  if (!location.hash.includes('=')) return null;
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (!h.has('access_token') && !h.has('error')) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (h.get('error')) {
+    const expired = h.get('error_code') === 'otp_expired';
+    return { error: expired ? 'Ce lien a expiré ou a déjà servi : redemande un e-mail.' : (h.get('error_description') || 'Lien invalide') };
+  }
+  if (h.get('type') === 'recovery') {
+    pendingRecovery = { access_token: h.get('access_token'), refresh_token: h.get('refresh_token'), expires_in: +h.get('expires_in') || 3600 };
+    return { mode: 'reset' };
+  }
+  return null;
+}
+
+async function setNewPassword(password) {
+  const r = pendingRecovery;
+  const user = await supa('/auth/v1/user', { method: 'PUT', token: r.access_token, body: { password } });
+  pendingRecovery = null;
+  await afterSignIn(sessionFrom({ ...r, user }));
+  return user.email;
 }
 
 async function deleteCloudData() {
@@ -213,6 +244,7 @@ let authMode = 'login';
 
 const AUTH_TEXT = {
   login: { title: 'Weekly', lead: 'Connecte-toi pour retrouver tes données sur tous tes appareils.', submit: 'Se connecter', pwd: 'current-password', ph: '' },
+  reset: { title: 'Nouveau mot de passe', lead: 'Choisis ton nouveau mot de passe : tu seras connecté directement.', submit: 'Enregistrer et me connecter', pwd: 'new-password', ph: '8 caractères minimum' },
   signup: { title: 'Créer ton compte', lead: 'Tes données seront liées à ton compte et retrouvées sur tous tes appareils.', submit: 'Créer mon compte', pwd: 'new-password', ph: '8 caractères minimum' },
 };
 
@@ -236,16 +268,16 @@ function showAuth(mode = 'login', message = '') {
         <img class="auth-logo" src="icons/icon-192.png" alt="">
         <h1 data-t="title">${forgot ? 'Mot de passe oublié' : t.title}</h1>
         <p class="ob-lead" data-t="lead">${forgot ? 'Tu vas recevoir un e-mail pour choisir un nouveau mot de passe.' : t.lead}</p>
-        ${!forgot ? `<div class="seg ${mode === 'signup' ? 'right' : ''}"><button type="button" data-auth="login" class="${mode !== 'signup' ? 'on' : ''}">Connexion</button><button type="button" data-auth="signup" class="${mode === 'signup' ? 'on' : ''}">Créer un compte</button></div>` : ''}
+        ${!forgot && mode !== 'reset' ? `<div class="seg ${mode === 'signup' ? 'right' : ''}"><button type="button" data-auth="login" class="${mode !== 'signup' ? 'on' : ''}">Connexion</button><button type="button" data-auth="signup" class="${mode === 'signup' ? 'on' : ''}">Créer un compte</button></div>` : ''}
         <div class="field">
-          <label>E-mail <input type="email" name="email" autocomplete="email" inputmode="email" required value="${esc(email)}"></label>
-          ${forgot ? '' : `<label>Mot de passe <input type="password" name="password" autocomplete="${t.pwd}" minlength="8" required placeholder="${t.ph}"></label>`}
+          ${mode === 'reset' ? '' : `<label>E-mail <input type="email" name="email" autocomplete="email" inputmode="email" required value="${esc(email)}"></label>`}
+          ${forgot ? '' : `<label>${mode === 'reset' ? 'Nouveau mot de passe' : 'Mot de passe'} <input type="password" name="password" autocomplete="${t.pwd}" minlength="8" required placeholder="${t.ph}"></label>`}
         </div>
+        ${forgot || mode === 'reset' ? '' : `<button type="button" class="text-btn forgot-link" data-auth="forgot" ${mode === 'signup' ? 'hidden' : ''}>Mot de passe oublié ?</button>`}
         ${message ? `<p class="auth-msg">${esc(message)}</p>` : ''}
         <button type="submit" class="primary" data-t="submit">${forgot ? 'Envoyer l\'e-mail' : t.submit}</button>
-        ${forgot ? '<button type="button" class="text-btn auth-link" data-auth="login">← Retour à la connexion</button>'
-          : `<button type="button" class="text-btn auth-link" data-auth="forgot" ${mode === 'signup' ? 'hidden' : ''}>Mot de passe oublié ?</button>`}
-        ${getSession() ? '' : '<button type="button" class="text-btn auth-link muted" data-auth="guest">Continuer sans compte</button>'}
+        ${forgot ? '<button type="button" class="text-btn auth-link" data-auth="login">← Retour à la connexion</button>' : ''}
+        ${getSession() || mode === 'reset' ? '' : '<button type="button" class="text-btn auth-link muted" data-auth="guest">Continuer sans compte</button>'}
       </div>
     </form>`;
 }
@@ -295,14 +327,20 @@ async function onAuthSubmit(e) {
   const email = String(f.get('email') || '').trim();
   const password = String(f.get('password') || '');
   const btn = e.target.querySelector('[type=submit]');
-  if (!/^\S+@\S+\.\S+$/.test(email)) return showAuth(authMode, 'Adresse e-mail invalide');
+  if (authMode !== 'reset' && !/^\S+@\S+\.\S+$/.test(email)) return showAuth(authMode, 'Adresse e-mail invalide');
   if (authMode !== 'forgot' && password.length < 8) return showAuth(authMode, 'Le mot de passe doit faire au moins 8 caractères');
   btn.disabled = true;
   btn.textContent = '…';
   try {
+    if (authMode === 'reset') {
+      const who = await setNewPassword(password);
+      hideAuth();
+      afterAuthFlow();
+      return toast(`Mot de passe changé ✓ Connecté : ${who}`);
+    }
     if (authMode === 'forgot') {
       await resetPassword(email);
-      return showAuth('login', 'E-mail envoyé. Choisis un nouveau mot de passe via le lien, puis reviens te connecter ici.');
+      return showAuth('login', `E-mail envoyé à ${email}. Ouvre le lien reçu pour choisir un nouveau mot de passe, puis connecte-toi ici avec.`);
     }
     if (authMode === 'signup') {
       const r = await signUp(email, password);
