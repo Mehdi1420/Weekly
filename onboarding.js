@@ -62,13 +62,14 @@ const readingWindow = () => { const end = prefMinutes('bedtime', '23:00'); retur
 
 // ---------- Écran ----------
 
-const OB_STEPS = ['welcome', 'modules', 'life', 'rhythm', 'sports', 'interests', 'goals', 'health', 'done'];
+const OB_STEPS = ['welcome', 'modules', 'life', 'rhythm', 'sports', 'interests', 'goals', 'health', 'review', 'done'];
 let ob = null; // état du questionnaire en cours
 
 function startOnboarding(stepName) {
   ob = {
     step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '', geminiKey: data.settings.geminiKey || '',
     lifeText: (data.prefs && data.prefs.lifeText) || '', analyzedText: null, routines: [],
+    analysis: null, touched: new Set(),
   };
   let el = document.getElementById('onboarding');
   if (!el) {
@@ -76,6 +77,11 @@ function startOnboarding(stepName) {
     el.id = 'onboarding';
     document.body.appendChild(el);
     el.addEventListener('click', onboardingClick);
+    // Ce que l'utilisateur modifie lui-même n'est plus écrasé par l'analyse en arrière-plan
+    el.addEventListener('input', e => {
+      const k = e.target.dataset.ob || (e.target.dataset.obMod && 'modules');
+      if (k && ob) ob.touched.add(k);
+    });
     el.classList.add('screen-in');
   }
   document.body.classList.add('ob-open');
@@ -84,7 +90,7 @@ function startOnboarding(stepName) {
 }
 
 function obVisibleSteps() {
-  return OB_STEPS.filter(s => (s !== 'goals' || ob.p.modules.goals) && (s !== 'health' || ob.p.modules.forme));
+  return OB_STEPS.filter(s => (s !== 'goals' || ob.p.modules.goals) && (s !== 'health' || ob.p.modules.forme) && (s !== 'review' || !!ob.analysis));
 }
 
 const chip = (group, id, label, on) => `<button type="button" class="chip selectable ${on ? 'active' : ''}" data-ob-chip="${group}" data-id="${id}">${label}</button>`;
@@ -120,17 +126,8 @@ function renderOnboarding(dir = 0) {
       <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>
       ${geminiKeyButton()}`}`;
   } else if (name === 'rhythm') {
-    const kept = ob.routines;
     body = `
-      ${kept.length ? `
-      <h1>Ce que j'ai compris</h1>
-      <p class="ob-lead">Ces activités reviendront chaque semaine dans ton planning. Décoche ce qui ne va pas (tu pourras tout modifier ensuite).</p>
-      <div class="field">${kept.map((r, i) => `
-        <label><span><span class="dot" style="background:${cat(r.category).color};display:inline-block;margin-right:6px"></span><b>${esc(r.title)}</b><br>
-          <small>${daysLabel(r.days)[0].toUpperCase() + daysLabel(r.days).slice(1)} · ${r.start}–${r.end}</small></span>
-          <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
-      </div>` : ''}
-      <h${kept.length ? '2 class="ob-sub"' : '1'}>Ton rythme</h${kept.length ? '2' : '1'}>
+      <h1>Ton rythme</h1>
       <p class="ob-lead">L'app ne te proposera des activités (sport, lecture, projets…) que pendant ton temps libre. Indique quand il commence et quand il se termine.</p>
       <div class="field rhythm">
         <label><span>Libre en semaine dès<small>Fin de tes cours ou de ton travail</small></span><input type="time" data-ob="eveningStart" value="${p.eveningStart}"></label>
@@ -182,6 +179,23 @@ function renderOnboarding(dir = 0) {
       <p class="ob-lead">Tu tapes ton repas comme tu parles, l'IA calcule les calories automatiquement. Gratuit avec une clé Google Gemini : ${geminiKeyLink()} → <b>Create API key</b>. Facultatif, modifiable dans les Réglages.</p>
       <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>
       ${geminiKeyButton()}`}`;
+  } else if (name === 'review') {
+    const kept = ob.routines;
+    const a = ob.analysis;
+    body = a.status === 'pending' ? `
+      <div class="ob-hero ob-thinking">🤖</div>
+      <h1>Encore quelques secondes…</h1>
+      <p class="ob-lead">Gemini termine l'analyse de ton texte pour bien comprendre ta semaine. Cette page se met à jour toute seule.</p>
+      <div class="ob-progress"><span></span></div>` : `
+      <h1>Ce que j'ai compris</h1>
+      ${kept.length ? `
+      <p class="ob-lead">Ces activités reviendront chaque semaine dans ton planning. Décoche ce qui ne va pas (tu pourras tout modifier ensuite).</p>
+      <div class="field">${kept.map((r, i) => `
+        <label><span><span class="dot" style="background:${cat(r.category).color};display:inline-block;margin-right:6px"></span><b>${esc(r.title)}</b><br>
+          <small>${daysLabel(r.days)[0].toUpperCase() + daysLabel(r.days).slice(1)} · ${r.start}–${r.end}</small></span>
+          <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
+      </div>` : '<p class="ob-lead">Je n\'ai pas repéré d\'activité à jour et heure fixes dans ton texte. Tu pourras en ajouter depuis ta semaine, ou avec « Dis-le à Weekly ».</p>'}
+      ${a.res && a.res.error ? `<p class="help">IA indisponible (${esc(a.res.error)}) : analyse simplifiée.</p>` : ''}`;
   } else {
     const n = buildIdeas(p).length;
     body = `
@@ -198,11 +212,15 @@ function renderOnboarding(dir = 0) {
   }
   const last = ob.step === steps.length - 1;
   const el = document.getElementById('onboarding');
+  const waiting = name === 'review' && ob.analysis && ob.analysis.status === 'pending';
   const nav = `
         ${ob.step > 0 ? '<button type="button" class="secondary" data-ob-nav="back">Retour</button>' : (data.settings.onboarded ? '<button type="button" class="secondary" data-ob-nav="close">Annuler</button>' : '')}
-        <button type="button" class="primary" data-ob-nav="${last ? 'finish' : 'next'}">${last ? 'C\'est parti' : 'Continuer'}</button>`;
+        <button type="button" class="primary" data-ob-nav="${last ? 'finish' : 'next'}" ${waiting ? 'disabled' : ''}>${last ? 'C\'est parti' : waiting ? 'Analyse en cours…' : 'Continuer'}</button>`;
   const dots = el.querySelectorAll('.ob-dots span');
+  const badge = ob.analysis && ob.analysis.status === 'pending' && name !== 'review'
+    ? '<div class="ob-ai-badge">🤖 Gemini analyse ton texte en arrière-plan…</div>' : '';
   if (dots.length === steps.length) {
+    el.querySelector('.ob-badge').innerHTML = badge;
     // Mise à jour sur place : la barre de progression avance en douceur et seul le contenu change
     dots.forEach((d, i) => d.classList.toggle('on', i <= ob.step));
     el.querySelector('.ob-body').innerHTML = body;
@@ -211,6 +229,7 @@ function renderOnboarding(dir = 0) {
     el.innerHTML = `
     <div class="ob-inner">
       <div class="ob-dots">${steps.map((_, i) => `<span class="${i <= ob.step ? 'on' : ''}"></span>`).join('')}</div>
+      <div class="ob-badge">${badge}</div>
       <div class="ob-body">${body}</div>
       <div class="ob-nav">${nav}</div>
     </div>`;
@@ -266,33 +285,46 @@ function onboardingClick(e) {
     renderOnboarding();
   } else if (t.dataset.obStep) {
     ob.p.sportPerWeek = Math.max(0, Math.min(14, ob.p.sportPerWeek + +t.dataset.obStep));
+    ob.touched.add('sportPerWeek');
     renderOnboarding();
   } else if (t.dataset.obNav === 'next') {
-    if (obVisibleSteps()[ob.step] === 'life' && ob.lifeText && ob.lifeText !== ob.analyzedText) analyzeLifeStep(t);
-    else { ob.step++; renderOnboarding(1); }
+    if (obVisibleSteps()[ob.step] === 'life' && ob.lifeText && ob.lifeText !== ob.analyzedText) startLifeAnalysis();
+    ob.step++;
+    renderOnboarding(1);
   }
   else if (t.dataset.obNav === 'back') { ob.step--; renderOnboarding(-1); }
   else if (t.dataset.obNav === 'close') closeOnboarding();
   else if (t.dataset.obNav === 'finish') finishOnboarding();
 }
 
-// Analyse le texte libre puis passe à l'étape suivante, pré-remplie
-async function analyzeLifeStep(btn) {
-  btn.disabled = true;
-  btn.textContent = 'Analyse en cours…';
-  const res = await analyzeLife(ob.lifeText, ob.geminiKey || data.settings.geminiKey);
-  if (!ob) return;
-  // Clé validée par l'analyse : on l'enregistre tout de suite (elle sert aussi aux calories)
-  if (res.by === 'ia' && ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
-    Object.assign(data.settings, { geminiKey: ob.geminiKey, aiMode: 'gemini' });
-    save();
-  }
-  applyLifeToOnboarding(res);
-  ob.analyzedText = ob.lifeText;
-  ob.step++;
-  renderOnboarding(1);
-  if (res.error) toast(`IA indisponible (${res.error}) : analyse simplifiée`);
-  else toast(res.routines.length ? `${res.routines.length} activité${res.routines.length > 1 ? 's' : ''} régulière${res.routines.length > 1 ? 's' : ''} repérée${res.routines.length > 1 ? 's' : ''}` : 'Rien de régulier repéré : complète les étapes suivantes');
+// Analyse du texte libre en arrière-plan : l'IA prend le temps de réfléchir pendant que
+// l'utilisateur continue le questionnaire ; le résultat complète les étapes suivantes.
+function startLifeAnalysis() {
+  const text = ob.lifeText;
+  const key = ob.geminiKey || data.settings.geminiKey;
+  const run = {};
+  ob.analyzedText = text;
+  ob.analysis = run;
+  run.status = 'pending';
+  analyzeLife(text, key, { deep: true }).then(res => {
+    if (!ob || ob.analysis !== run) return; // questionnaire fermé ou texte réanalysé entre-temps
+    readOnboardingFields();
+    // Clé validée par l'analyse : on l'enregistre tout de suite (elle sert aussi aux calories)
+    if (res.by === 'ia' && ob.geminiKey && ob.geminiKey !== data.settings.geminiKey) {
+      Object.assign(data.settings, { geminiKey: ob.geminiKey, aiMode: 'gemini' });
+      save();
+    }
+    applyLifeToOnboarding(res);
+    run.status = 'done';
+    run.res = res;
+    const name = obVisibleSteps()[ob.step];
+    const el = document.getElementById('onboarding');
+    const typing = el && el.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+    // En pleine saisie : on ne redessine pas sous les doigts, l'étape suivante affichera le résultat
+    if (typing && name !== 'review') el.querySelector('.ob-badge').innerHTML = '';
+    else renderOnboarding(name === 'review' ? 1 : 0);
+    if (name !== 'review') toast(res.routines.length ? `🤖 Analyse terminée : ${res.routines.length} activité${res.routines.length > 1 ? 's' : ''} régulière${res.routines.length > 1 ? 's' : ''} repérée${res.routines.length > 1 ? 's' : ''}` : '🤖 Analyse terminée');
+  });
 }
 
 function closeOnboarding() {

@@ -139,7 +139,7 @@ function analyzeLifeLocal(text) {
 
 // ---------- Analyse par l'IA (Gemini) ----------
 
-async function analyzeLifeAI(text, key) {
+async function analyzeLifeAI(text, key, deep = false) {
   if (!data.settings.geminiModel || data.settings.geminiKey !== key) data.settings.geminiModel = await pickGeminiModel(key);
   const sportIds = SPORTS.map(s => s[0]).join(', ');
   const interestIds = INTERESTS.map(s => s[0]).join(', ');
@@ -178,7 +178,7 @@ async function analyzeLifeAI(text, key) {
       },
     },
   };
-  const res = await geminiGenerate(data.settings.geminiModel, key, body);
+  const res = await geminiGenerate(data.settings.geminiModel, key, body, { deep });
   const part = res.candidates && res.candidates[0] && res.candidates[0].content && res.candidates[0].content.parts.find(p => p.text);
   if (!part) throw new Error('réponse vide');
   return cleanLifeResult(JSON.parse(part.text));
@@ -215,10 +215,10 @@ function cleanLifeResult(r) {
 }
 
 // Analyse : IA si une clé est disponible, sinon (ou en cas d'erreur) analyseur intégré
-async function analyzeLife(text, key) {
+async function analyzeLife(text, key, { deep = false } = {}) {
   if (key && navigator.onLine) {
     try {
-      return { ...(await analyzeLifeAI(text, key)), by: 'ia' };
+      return { ...(await analyzeLifeAI(text, key, deep)), by: 'ia' };
     } catch (e) {
       return { ...analyzeLifeLocal(text), by: 'local', error: e.message };
     }
@@ -227,23 +227,26 @@ async function analyzeLife(text, key) {
 }
 
 // Pré-remplit le questionnaire avec ce qui a été compris
+// L'analyse peut arriver pendant que l'utilisateur continue le questionnaire : on ne remplace pas
+// ce qu'il a déjà modifié lui-même (ob.touched), on complète seulement.
 function applyLifeToOnboarding(res) {
   const p = ob.p;
+  const mine = k => ob.touched && ob.touched.has(k);
   ob.routines = res.routines.map(r => ({ ...r, keep: true }));
   if (res.situation) p.situation = res.situation;
-  if (res.bedtime) p.bedtime = res.bedtime;
+  if (res.bedtime && !mine('bedtime')) p.bedtime = res.bedtime;
   // Libre en semaine : après la fin du travail ou des cours (le plus tard en semaine) + 30 min
   const ends = res.routines.filter(r => ['travail', 'etudes'].includes(r.category) && r.days.some(d => d < 5)).map(r => toMin(r.end));
-  if (ends.length) p.eveningStart = fromMin(Math.min(21 * 60, Math.ceil((Math.max(...ends) + 30) / 15) * 15));
+  if (ends.length && !mine('eveningStart')) p.eveningStart = fromMin(Math.min(21 * 60, Math.ceil((Math.max(...ends) + 30) / 15) * 15));
   p.sports = [...new Set([...p.sports, ...res.sports])];
   const other = [...new Set([...(p.otherSport ? p.otherSport.split(/,\s*/) : []), ...(res.otherSports || [])])].filter(Boolean);
   p.otherSport = other.join(', ');
-  if (res.sportPerWeek) p.sportPerWeek = res.sportPerWeek;
+  if (res.sportPerWeek && !mine('sportPerWeek')) p.sportPerWeek = res.sportPerWeek;
   p.interests = [...new Set([...p.interests, ...res.interests])];
   const oi = [...new Set([...(p.otherInterest ? p.otherInterest.split(/,\s*/) : []), ...(res.otherInterests || [])])].filter(Boolean);
   p.otherInterest = oi.join(', ');
   p.goals = [...new Set([...p.goals, ...res.goals])];
   if (res.language) p.language = res.language;
   if (res.certName) p.certName = res.certName;
-  if (res.goals.length || res.routines.some(r => r.category === 'etudes')) p.modules.goals = true;
+  if ((res.goals.length || res.routines.some(r => r.category === 'etudes')) && !mine('modules')) p.modules.goals = true;
 }

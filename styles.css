@@ -464,3 +464,13 @@ a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; 
 #upd-result .primary { margin-top: 4px; }
 .week-actions .secondary { flex: 1 !important; font-size: 15px; }
 .push-code summary { color: var(--accent); font-weight: 600; padding: 10px 4px; cursor: pointer; }
+
+/* Analyse IA en arrière-plan pendant le questionnaire */
+.ob-badge:empty { display: none; }
+.ob-ai-badge { margin: -10px auto 14px; width: fit-content; font-size: 13px; font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 6px 12px; border-radius: 999px; animation: ob-pulse 1.6s ease-in-out infinite; }
+@keyframes ob-pulse { 50% { opacity: .55; } }
+.ob-thinking { animation: ob-pulse 1.6s ease-in-out infinite; }
+.ob-progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 18px; }
+.ob-progress span { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--grad); animation: ob-slide 1.4s ease-in-out infinite; }
+@keyframes ob-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }

@@ -454,9 +454,11 @@ function thinkingOptions(model) {
   return [null];
 }
 
-async function geminiGenerate(model, key, body, timeoutMs = 30000) {
-  const memo = (data.settings.geminiThinking ||= {});
-  const opts = thinkingOptions(model);
+// deep : on laisse le modèle réfléchir (meilleure compréhension, plus lent) — pour les analyses
+// faites en arrière-plan, quand l'utilisateur n'attend pas la réponse.
+async function geminiGenerate(model, key, body, { deep = false, timeoutMs = deep ? 120000 : 30000 } = {}) {
+  const memo = deep ? {} : (data.settings.geminiThinking ||= {});
+  const opts = deep ? [null] : thinkingOptions(model);
   const start = opts.findIndex(o => JSON.stringify(o) === memo[model]);
   for (const opt of opts.slice(Math.max(0, start))) {
     const b = { ...body, generationConfig: { ...body.generationConfig, ...(opt ? { thinkingConfig: opt } : {}) } };
@@ -464,7 +466,7 @@ async function geminiGenerate(model, key, body, timeoutMs = 30000) {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await geminiFetch(`models/${model}:generateContent`, key, b, ctrl.signal);
-      memo[model] = JSON.stringify(opt);
+      if (!deep) memo[model] = JSON.stringify(opt);
       return res;
     } catch (e) {
       if (e.name === 'AbortError') throw new Error('l\'IA met trop de temps à répondre');
