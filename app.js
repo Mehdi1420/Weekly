@@ -139,6 +139,7 @@ const state = {
   proposals: [],
   todayDismissed: false,
   gridScroll: null,
+  tabScroll: {},
 };
 
 const view = document.getElementById('view');
@@ -1261,6 +1262,7 @@ async function fetchStepsFromGist(force = false) {
     const res = await fetch(`https://api.github.com/gists/${id}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) throw new Error(res.status === 404 ? 'gist introuvable (vérifie le lien)' : `erreur ${res.status}`);
     const gist = await res.json();
+    let imported = false;
     const read = async f => (f.truncated ? (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content);
     // Calendrier Moodle déposé par la GitHub Action « Import calendrier »
     const cal = gist.files[CAL_FILE];
@@ -1270,10 +1272,11 @@ async function fetchStepsFromGist(force = false) {
       if (sig !== data.settings.calSig) {
         importCalendar(ics);
         data.settings.calSig = sig;
+        imported = true;
       }
       data.settings.calSyncedAt = gist.updated_at;
       save();
-      if (['week', 'goals'].includes(state.tab) && !sheet.open) render();
+      if (imported && ['week', 'goals'].includes(state.tab) && !sheet.open) render();
     }
     // Agenda personnel (Google / iPhone) déposé par la même GitHub Action
     const agenda = gist.files[AGENDA_FILE];
@@ -1283,10 +1286,11 @@ async function fetchStepsFromGist(force = false) {
       if (sig !== data.settings.agendaSig) {
         importAgenda(ics);
         data.settings.agendaSig = sig;
+        imported = true;
       }
       data.settings.agendaSyncedAt = gist.updated_at;
       save();
-      if (['week', 'goals'].includes(state.tab) && !sheet.open) render();
+      if (imported && ['week', 'goals'].includes(state.tab) && !sheet.open) render();
     }
     const file = gist.files[GIST_FILE];
     const totals = file ? parseSteps(await read(file), toISO(new Date(gist.updated_at))) : {};
@@ -1491,9 +1495,19 @@ function showPushCode(code) {
 document.querySelector('.tabbar').addEventListener('click', e => {
   const b = e.target.closest('button[data-tab]');
   if (!b) return;
-  state.tab = b.dataset.tab;
+  const to = b.dataset.tab;
+  // Toucher l'onglet déjà ouvert : remonter en haut en douceur, comme sur iOS
+  if (to === state.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  const order = [...document.querySelectorAll('.tabbar button')].map(x => x.dataset.tab);
+  const dir = order.indexOf(to) > order.indexOf(state.tab) ? 1 : -1;
+  state.tabScroll[state.tab] = window.scrollY;
+  state.tab = to;
   render();
-  window.scrollTo(0, 0);
+  // Chaque onglet retrouve l'endroit où on l'avait laissé
+  window.scrollTo(0, state.tabScroll[to] || 0);
+  view.classList.remove('tab-in-l', 'tab-in-r');
+  void view.offsetWidth; // relance l'animation
+  view.classList.add(dir > 0 ? 'tab-in-r' : 'tab-in-l');
   if (['health', 'goals', 'week'].includes(state.tab)) fetchStepsFromGist();
   if (state.tab === 'media') refreshRunningSeries().then(changed => { if (changed && state.tab === 'media' && !sheet.open) render(); });
 });
