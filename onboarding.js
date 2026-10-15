@@ -192,7 +192,7 @@ function renderOnboarding(dir = 0) {
       ${kept.length ? `
       <p class="ob-lead">Ces activités reviendront chaque semaine dans ton planning. Décoche ce qui ne va pas (tu pourras tout modifier ensuite).</p>
       <div class="field">${kept.map((r, i) => `
-        <label><span><span class="dot" style="background:${cat(r.category).color};display:inline-block;margin-right:6px"></span><b>${esc(r.title)}</b><br>
+        <label><span>${cat(r.category).icon} <b>${esc(r.title)}</b><br>
           <small>${daysLabel(r.days)[0].toUpperCase() + daysLabel(r.days).slice(1)} · ${r.start}–${r.end}</small></span>
           <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
       </div>` : '<p class="ob-lead">Je n\'ai pas repéré d\'activité à jour et heure fixes dans ton texte. Tu pourras en ajouter depuis ta semaine, ou avec « Dis-le à Weekly ».</p>'}
