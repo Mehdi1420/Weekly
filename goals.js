@@ -235,6 +235,20 @@ function bookEta(b) {
   return perDay > 0 && b.pages ? Math.ceil(left / perDay) : null;
 }
 
+// Genres écrits librement (« polar, fantasy, biographies ») rapprochés des thèmes du catalogue
+const FREE_BOOK_THEMES = [
+  [/fantasy|fantastique|dystop|anticipation|space|science.?fiction|\bsf\b/, 'sf'],
+  [/polar|thriller|policier|enquete|roman|litterature|classique|manga|bd|bande dessinee|aventure|romance|horreur/, 'roman'],
+  [/develop+ement perso|productivite|motivation|business|entrepren|psycho|bien.?etre|finance|argent|leadership/, 'productivite'],
+  [/histoire|histor|science|biograph|philo|econom|politique|geopolitique|astronomie|vulgarisation|essai/, 'science'],
+  [/programm|code|coding|python|javascript|developpeur|informatique|algorithm/, 'prog'],
+  [/cloud|aws|devops|reseau|cyber|securite|tech/, 'cloud'],
+];
+function freeBookThemes(text) {
+  const t = norm(text || '');
+  return FREE_BOOK_THEMES.filter(([re]) => re.test(t)).map(([, id]) => id);
+}
+
 function recommendBooks(n = 3) {
   const have = new Set(data.books.map(b => norm(b.title)));
   const w = {};
@@ -244,6 +258,7 @@ function recommendBooks(n = 3) {
     if (p.type === 'learning' || /program|code|dev|python|javascript/i.test(p.title)) add('prog', 3);
   });
   prefs().bookThemes.forEach(t => add(t, 2)); // goûts déclarés au questionnaire
+  freeBookThemes(prefs().otherBookThemes).forEach(t => add(t, 2)); // genres écrits librement
   data.books.filter(b => b.status === 'done' && b.rating).forEach(b => (b.themes || []).forEach(t => add(t, (b.rating - 3) * 1.5)));
   // Niveau : nombre de livres techniques déjà lus (on commence par les plus accessibles)
   const techDone = data.books.filter(b => b.status === 'done' && (b.themes || []).some(t => TECH_THEMES.includes(t))).length;
@@ -661,9 +676,12 @@ function openMoodleHelp() {
 function booksChatGPT() {
   const read = data.books.filter(b => b.status !== 'todo').map(b => `${b.title}${b.rating ? ` (${b.rating}/5)` : ''}`);
   const goals = data.projects.filter(p => p.active && p.type !== 'reading').map(p => p.title);
+  const pr = prefs();
+  const genres = [...BOOK_THEMES.filter(([id]) => pr.bookThemes.includes(id)).map(([, l]) => l.toLowerCase()), ...(pr.otherBookThemes ? [pr.otherBookThemes] : [])];
   const q = 'Propose-moi 5 livres à lire, avec pour chacun : titre | auteur | pourquoi pour moi (une phrase). ' +
     (goals.length ? `Mes objectifs du moment : ${goals.join(', ')}. ` : '') +
     (read.length ? `J'ai déjà lu : ${read.join(', ')}. ` : '') +
+    (genres.length ? `Les genres que j'aime : ${genres.join(', ')}. ` : '') +
     'Mélange livres utiles pour mes objectifs et un ou deux livres pour me détendre.';
   window.open(`https://chatgpt.com/?q=${encodeURIComponent(q)}`, '_blank');
 }

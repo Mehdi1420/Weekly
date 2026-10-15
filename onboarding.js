@@ -38,7 +38,7 @@ const defaultPrefs = () => ({
   name: '', situation: '', modules: { goals: true, forme: true },
   eveningStart: '18:00', bedtime: '23:00', weekendStart: '10:00',
   sports: [], otherSport: '', sportPerWeek: 2, interests: [], otherInterest: '',
-  goals: [], language: '', certName: '', bookThemes: [],
+  goals: [], language: '', certName: '', bookThemes: [], otherBookThemes: '',
 });
 const prefs = () => ({ ...defaultPrefs(), ...(data.prefs || {}) });
 
@@ -157,7 +157,8 @@ function renderOnboarding(dir = 0) {
       <div class="chips">${GOALS.map(([id, l]) => chip('goals', id, l, p.goals.includes(id))).join('')}</div>
       ${p.goals.includes('cert') ? `<div class="field"><label>Quelle certification ? <input type="text" data-ob="certName" value="${esc(p.certName)}" placeholder="Ex : Azure, Google Cloud…"></label></div>` : ''}
       ${p.goals.includes('language') ? `<div class="field"><label>Quelle langue ? <input type="text" data-ob="language" value="${esc(p.language)}" placeholder="Ex : anglais"></label></div>` : ''}
-      ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>` : ''}
+      ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>
+      <div class="field"><label>Autres genres <input type="text" data-ob="otherBookThemes" value="${esc(p.otherBookThemes || '')}" placeholder="Ex : polar, fantasy, manga, biographies…"></label></div>` : ''}
       <p class="help">🎓 Tu as des cours ? Tu pourras connecter Moodle dans l'onglet Objectifs pour importer cours et devoirs.</p>`;
   } else if (name === 'health') {
     const pr = ob.profile;
