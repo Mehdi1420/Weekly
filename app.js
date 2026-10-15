@@ -167,6 +167,11 @@ function render() {
     b.hidden = !!hidden[b.dataset.tab];
     b.classList.toggle('active', b.dataset.tab === state.tab);
   });
+  // Position de la bulle qui glisse derrière l'onglet actif
+  const tabs = [...document.querySelectorAll('.tabbar button:not([hidden])')];
+  const bar = document.querySelector('.tabbar');
+  bar.style.setProperty('--n', tabs.length);
+  bar.style.setProperty('--i', Math.max(0, tabs.findIndex(b => b.dataset.tab === state.tab)));
   if (state.tab === 'week') renderWeek();
   else if (state.tab === 'ideas') renderIdeas();
   else if (state.tab === 'health') renderHealth();
