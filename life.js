@@ -250,3 +250,107 @@ function applyLifeToOnboarding(res) {
   if (res.certName) p.certName = res.certName;
   if ((res.goals.length || res.routines.some(r => r.category === 'etudes')) && !mine('modules')) p.modules.goals = true;
 }
+
+// ---------- Réponses libres du questionnaire (sports, centres d'intérêt, objectifs, lectures) ----------
+// Tout ce que l'utilisateur écrit avec ses mots passe aussi par l'analyse : l'IA en tire des idées
+// d'activités (catégorie, durée, heure naturelle), des projets et des genres de lecture.
+
+const extrasTexts = p => ({ sports: p.otherSport || '', interets: p.otherInterest || '', objectifs: p.customGoal || '', lectures: p.otherBookThemes || '' });
+const extrasSig = p => JSON.stringify(extrasTexts(p));
+const splitFree = t => String(t || '').split(/[,;\n]|\bet\b/).map(x => x.trim().replace(/^(je |j'|j’)/i, '')).filter(x => x.length > 1);
+const cap = t => t[0].toUpperCase() + t.slice(1);
+
+// Sans IA : chaque élément séparé par une virgule devient une idée ou un projet
+function extrasLocal(p) {
+  const ideas = [
+    ...splitFree(p.otherSport).map(t => ({ title: cap(t), category: 'sport', duration: 60 })),
+    ...splitFree(p.otherInterest).map(t => ({ title: cap(t), category: 'loisirs', duration: 90 })),
+  ];
+  const projects = splitFree(p.customGoal).map(t => ({ title: cap(t), icon: '🎯', category: 'loisirs', weeklyMinutes: 120, session: 45 }));
+  return { ideas, projects, bookThemes: freeBookThemes(p.otherBookThemes) };
+}
+
+async function extrasAI(p, key) {
+  if (!data.settings.geminiModel || data.settings.geminiKey !== key) data.settings.geminiModel = await pickGeminiModel(key);
+  const body = {
+    systemInstruction: { parts: [{ text:
+      'Tu configures une app de planning. L\'utilisateur a répondu avec ses mots à des questions sur ses sports, ' +
+      'ses centres d\'intérêt, ses objectifs perso et ses lectures. Transforme ses réponses en : ' +
+      '1) idées d\'activités à proposer dans son temps libre (titre court et naturel en français, catégorie parmi travail, etudes, sport, social, loisirs, maison, sante, autre, ' +
+      'durée réaliste d\'une séance en minutes, et "at" = heure naturelle HH:MM seulement si l\'activité a un moment évident, sinon vide) ; ' +
+      '2) projets à suivre sur plusieurs semaines (titre, un emoji, catégorie, temps hebdomadaire réaliste en minutes, durée d\'une session en minutes) ; ' +
+      `3) genres de lecture parmi : ${BOOK_THEMES.map(t => t[0]).join(', ')}. ` +
+      'Une même envie ne doit apparaître qu\'une fois. N\'invente rien qui ne soit pas dans les réponses. ' +
+      `Ignore ce qui est déjà coché : ${JSON.stringify({ sports: p.sports, interets: p.interests, objectifs: p.goals })}.` }] },
+    contents: [{ role: 'user', parts: [{ text: JSON.stringify(extrasTexts(p)) }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          ideas: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+            title: { type: 'STRING' }, category: { type: 'STRING' }, duration: { type: 'INTEGER' }, at: { type: 'STRING' } }, required: ['title', 'category', 'duration'] } },
+          projects: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+            title: { type: 'STRING' }, icon: { type: 'STRING' }, category: { type: 'STRING' }, weeklyMinutes: { type: 'INTEGER' }, session: { type: 'INTEGER' } }, required: ['title', 'weeklyMinutes'] } },
+          bookThemes: { type: 'ARRAY', items: { type: 'STRING' } },
+        },
+        required: ['ideas', 'projects'],
+      },
+    },
+  };
+  const res = await geminiGenerate(data.settings.geminiModel, key, body, { deep: true });
+  const part = res.candidates && res.candidates[0] && res.candidates[0].content && res.candidates[0].content.parts.find(x => x.text);
+  if (!part) throw new Error('réponse vide');
+  return JSON.parse(part.text);
+}
+
+// Valide ce que renvoie l'IA (ou l'analyse simple) et coche tout par défaut
+function cleanExtras(r) {
+  const catIds = CATEGORIES.map(c => c.id);
+  const clamp = (v, a, b, d) => (Number.isInteger(v) ? Math.max(a, Math.min(b, v)) : d);
+  const time = t => (/^\d{1,2}:\d{2}$/.test(t || '') ? hm(...t.split(':')) : '');
+  const seen = new Set();
+  const uniq = t => { const k = norm(t); if (!k || seen.has(k)) return false; seen.add(k); return true; };
+  return {
+    ideas: (r.ideas || []).map(i => ({ title: String(i.title || '').trim().slice(0, 60), category: catIds.includes(i.category) ? i.category : 'loisirs', duration: clamp(i.duration, 10, 480, 60), at: time(i.at), keep: true }))
+      .filter(i => i.title && uniq(i.title)),
+    projects: (r.projects || []).map(x => ({ title: String(x.title || '').trim().slice(0, 60), icon: String(x.icon || '🎯').slice(0, 4), category: catIds.includes(x.category) ? x.category : 'loisirs',
+      weeklyMinutes: clamp(x.weeklyMinutes, 30, 900, 120), session: clamp(x.session, 15, 180, 45), keep: true })).filter(x => x.title && uniq(x.title)),
+    bookThemes: (r.bookThemes || []).filter(t => BOOK_THEMES.some(b => b[0] === t)),
+    error: r.error,
+  };
+}
+
+// Résultat à utiliser : celui de l'analyse s'il est prêt, sinon l'analyse simple
+function extrasResult(p) {
+  if (ob && ob.extras && ob.extras.status === 'done' && ob.extras.sig === extrasSig(p)) return ob.extras.res;
+  return cleanExtras(extrasLocal(p));
+}
+
+function startExtrasAnalysis() {
+  const p = ob.p;
+  const sig = extrasSig(p);
+  if (sig === ob.extrasSig) return;
+  ob.extrasSig = sig;
+  const empty = !Object.values(extrasTexts(p)).some(Boolean);
+  const key = ob.geminiKey || data.settings.geminiKey;
+  if (empty) { ob.extras = null; return; }
+  const run = { status: 'pending', sig };
+  ob.extras = run;
+  const job = key && navigator.onLine
+    ? extrasAI(p, key).catch(e => ({ ...extrasLocal(p), error: e.message }))
+    : Promise.resolve(extrasLocal(p));
+  job.then(raw => {
+    if (!ob || ob.extras !== run) return;
+    readOnboardingFields();
+    run.res = cleanExtras(raw);
+    run.status = 'done';
+    ob.p.bookThemes = [...new Set([...ob.p.bookThemes, ...run.res.bookThemes])];
+    const name = obVisibleSteps()[ob.step];
+    const el = document.getElementById('onboarding');
+    const typing = el && el.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+    if (typing && name !== 'review') { if (!(ob.analysis && ob.analysis.status === 'pending')) el.querySelector('.ob-badge').innerHTML = ''; }
+    else renderOnboarding(name === 'review' ? 1 : 0);
+  });
+}

@@ -38,7 +38,7 @@ const defaultPrefs = () => ({
   name: '', situation: '', modules: { goals: true, forme: true },
   eveningStart: '18:00', bedtime: '23:00', weekendStart: '10:00',
   sports: [], otherSport: '', sportPerWeek: 2, interests: [], otherInterest: '',
-  goals: [], language: '', certName: '', bookThemes: [], otherBookThemes: '',
+  goals: [], language: '', certName: '', bookThemes: [], otherBookThemes: '', customGoal: '',
 });
 const prefs = () => ({ ...defaultPrefs(), ...(data.prefs || {}) });
 
@@ -69,7 +69,7 @@ function startOnboarding(stepName) {
   ob = {
     step: 0, p: prefs(), profile: { ...data.profile }, weight: latestWeight() || '', geminiKey: data.settings.geminiKey || '',
     lifeText: (data.prefs && data.prefs.lifeText) || '', analyzedText: null, routines: [],
-    analysis: null, touched: new Set(),
+    analysis: null, touched: new Set(), extras: null, extrasSig: '', more: {},
   };
   let el = document.getElementById('onboarding');
   if (!el) {
@@ -90,7 +90,16 @@ function startOnboarding(stepName) {
 }
 
 function obVisibleSteps() {
-  return OB_STEPS.filter(s => (s !== 'goals' || ob.p.modules.goals) && (s !== 'health' || ob.p.modules.forme) && (s !== 'review' || !!ob.analysis));
+  return OB_STEPS.filter(s => (s !== 'goals' || ob.p.modules.goals) && (s !== 'health' || ob.p.modules.forme) && (s !== 'review' || !!ob.analysis || !!ob.extras));
+}
+
+// Peu de choix affichés au départ (les plus courants + ceux déjà cochés) ; le reste sur demande
+const FEW = 6;
+function shortList(group, list, selected) {
+  const shown = ob.more[group] ? list : list.filter(([id], i) => i < FEW || selected.includes(id));
+  const more = !ob.more[group] && shown.length < list.length
+    ? `<button type="button" class="chip more-chip" data-ob-more="${group}">＋ ${list.length - shown.length} autres idées</button>` : '';
+  return shown.map(([id, l]) => chip(group, id, l, selected.includes(id))).join('') + more;
 }
 
 const chip = (group, id, label, on) => `<button type="button" class="chip selectable ${on ? 'active' : ''}" data-ob-chip="${group}" data-id="${id}">${label}</button>`;
@@ -137,19 +146,19 @@ function renderOnboarding(dir = 0) {
   } else if (name === 'sports') {
     body = `
       <h1>Tes sports</h1>
-      <p class="ob-lead">Ceux que tu pratiques ou que tu aimerais pratiquer.</p>
-      <div class="chips">${SPORTS.map(([id, l]) => chip('sports', id, l, p.sports.includes(id))).join('')}</div>
+      <p class="ob-lead">Ceux que tu pratiques ou que tu aimerais pratiquer. Coche ou écris-les avec tes mots.</p>
+      <div class="chips">${shortList('sports', SPORTS, p.sports)}</div>
+      <div class="field"><label class="free"><span>Avec tes mots</span><textarea data-ob="otherSport" rows="2" placeholder="Ex : surf l'été, foot en salle avec les collègues, je veux reprendre la course…">${esc(p.otherSport)}</textarea></label></div>
       <div class="field">
-        <label>Autre <input type="text" data-ob="otherSport" value="${esc(p.otherSport)}" placeholder="Ex : rugby, surf…"></label>
         <label>Séances par semaine visées
           <span class="stepper"><button type="button" data-ob-step="-1">−</button><b>${p.sportPerWeek}</b><button type="button" data-ob-step="1">+</button></span></label>
       </div>`;
   } else if (name === 'interests') {
     body = `
       <h1>Tes centres d'intérêt</h1>
-      <p class="ob-lead">L'app s'en sert pour te proposer des idées qui te ressemblent.</p>
-      <div class="chips">${INTERESTS.map(([id, l]) => chip('interests', id, l, p.interests.includes(id))).join('')}</div>
-      <div class="field"><label>Autre <input type="text" data-ob="otherInterest" value="${esc(p.otherInterest)}" placeholder="Ex : théâtre, pêche…"></label></div>`;
+      <p class="ob-lead">L'app s'en sert pour te proposer des idées qui te ressemblent. Coche ou écris-les avec tes mots.</p>
+      <div class="chips">${shortList('interests', INTERESTS, p.interests)}</div>
+      <div class="field"><label class="free"><span>Avec tes mots</span><textarea data-ob="otherInterest" rows="3" placeholder="Ex : théâtre, pêche le week-end, soirées jeux avec les potes, j'aimerais me mettre à la peinture…">${esc(p.otherInterest)}</textarea></label></div>`;
   } else if (name === 'goals') {
     body = `
       <h1>Tes objectifs perso</h1>
@@ -159,6 +168,7 @@ function renderOnboarding(dir = 0) {
       ${p.goals.includes('language') ? `<div class="field"><label>Quelle langue ? <input type="text" data-ob="language" value="${esc(p.language)}" placeholder="Ex : anglais"></label></div>` : ''}
       ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>
       <div class="field"><label>Autres genres <input type="text" data-ob="otherBookThemes" value="${esc(p.otherBookThemes || '')}" placeholder="Ex : polar, fantasy, manga, biographies…"></label></div>` : ''}
+      <div class="field"><label class="free"><span>Autre chose en tête ?</span><textarea data-ob="customGoal" rows="2" placeholder="Ex : apprendre le montage vidéo, passer le permis, lancer un side project…">${esc(p.customGoal || '')}</textarea></label></div>
       <p class="help">🎓 Tu as des cours ? Tu pourras connecter Moodle dans l'onglet Objectifs pour importer cours et devoirs.</p>`;
   } else if (name === 'health') {
     const pr = ob.profile;
@@ -182,11 +192,12 @@ function renderOnboarding(dir = 0) {
       ${geminiKeyButton()}`}`;
   } else if (name === 'review') {
     const kept = ob.routines;
-    const a = ob.analysis;
-    body = a.status === 'pending' ? `
+    const a = ob.analysis || { status: 'done' };
+    const x = ob.extras && ob.extras.status === 'done' ? ob.extras.res : null;
+    body = a.status === 'pending' || (ob.extras && ob.extras.status === 'pending') ? `
       <div class="ob-hero ob-thinking">🤖</div>
       <h1>Encore quelques secondes…</h1>
-      <p class="ob-lead">Gemini termine l'analyse de ton texte pour bien comprendre ta semaine. Cette page se met à jour toute seule.</p>
+      <p class="ob-lead">Gemini termine l'analyse de ce que tu as écrit pour bien comprendre ta semaine et tes envies. Cette page se met à jour toute seule.</p>
       <div class="ob-progress"><span></span></div>` : `
       <h1>Ce que j'ai compris</h1>
       ${kept.length ? `
@@ -195,8 +206,17 @@ function renderOnboarding(dir = 0) {
         <label><span>${cat(r.category).icon} <b>${esc(r.title)}</b><br>
           <small>${daysLabel(r.days)[0].toUpperCase() + daysLabel(r.days).slice(1)} · ${r.start}–${r.end}</small></span>
           <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
-      </div>` : '<p class="ob-lead">Je n\'ai pas repéré d\'activité à jour et heure fixes dans ton texte. Tu pourras en ajouter depuis ta semaine, ou avec « Dis-le à Weekly ».</p>'}
-      ${a.res && a.res.error ? `<p class="help">IA indisponible (${esc(a.res.error)}) : analyse simplifiée.</p>` : ''}`;
+      </div>` : ob.analysis ? '<p class="ob-lead">Je n\'ai pas repéré d\'activité à jour et heure fixes dans ton texte. Tu pourras en ajouter depuis ta semaine, ou avec « Dis-le à Weekly ».</p>' : ''}
+      ${x && (x.ideas.length || x.projects.length) ? `
+      <h2 class="ob-sub">D'après tes mots</h2>
+      <p class="ob-lead">Ce que j'ai tiré de ce que tu as écrit. Décoche ce qui ne va pas.</p>
+      <div class="field">${x.ideas.map((it, i) => `
+        <label><span>${cat(it.category).icon} <b>${esc(it.title)}</b><br><small>Idée d'activité · ${fmtDuration(it.duration)}${it.at ? ` · vers ${it.at}` : ''}</small></span>
+          <input type="checkbox" data-ob-xidea="${i}" ${it.keep ? 'checked' : ''}></label>`).join('')}${x.projects.map((pr, i) => `
+        <label><span>${esc(pr.icon || '🎯')} <b>${esc(pr.title)}</b><br><small>Projet · ${fmtDuration(pr.weeklyMinutes)} par semaine</small></span>
+          <input type="checkbox" data-ob-xproj="${i}" ${pr.keep ? 'checked' : ''}></label>`).join('')}
+      </div>` : ''}
+      ${(a.res && a.res.error) || (x && x.error) ? `<p class="help">IA indisponible (${esc((a.res && a.res.error) || x.error)}) : analyse simplifiée.</p>` : ''}`;
   } else {
     const n = buildIdeas(p).length;
     body = `
@@ -213,13 +233,14 @@ function renderOnboarding(dir = 0) {
   }
   const last = ob.step === steps.length - 1;
   const el = document.getElementById('onboarding');
-  const waiting = name === 'review' && ob.analysis && ob.analysis.status === 'pending';
+  const pending = (ob.analysis && ob.analysis.status === 'pending') || (ob.extras && ob.extras.status === 'pending');
+  const waiting = name === 'review' && pending;
   const nav = `
         ${ob.step > 0 ? '<button type="button" class="secondary" data-ob-nav="back">Retour</button>' : (data.settings.onboarded ? '<button type="button" class="secondary" data-ob-nav="close">Annuler</button>' : '')}
         <button type="button" class="primary" data-ob-nav="${last ? 'finish' : 'next'}" ${waiting ? 'disabled' : ''}>${last ? 'C\'est parti' : waiting ? 'Analyse en cours…' : 'Continuer'}</button>`;
   const dots = el.querySelectorAll('.ob-dots span');
-  const badge = ob.analysis && ob.analysis.status === 'pending' && name !== 'review'
-    ? '<div class="ob-ai-badge">🤖 Gemini analyse ton texte en arrière-plan…</div>' : '';
+  const badge = pending && name !== 'review'
+    ? '<div class="ob-ai-badge">🤖 Gemini analyse tes réponses en arrière-plan…</div>' : '';
   if (dots.length === steps.length) {
     el.querySelector('.ob-badge').innerHTML = badge;
     // Mise à jour sur place : la barre de progression avance en douceur et seul le contenu change
@@ -270,6 +291,8 @@ function readOnboardingFields() {
   const life = el.querySelector('[data-ob-life]');
   if (life) ob.lifeText = life.value.trim();
   el.querySelectorAll('[data-ob-routine]').forEach(i => { ob.routines[+i.dataset.obRoutine].keep = i.checked; });
+  el.querySelectorAll('[data-ob-xidea]').forEach(i => { ob.extras.res.ideas[+i.dataset.obXidea].keep = i.checked; });
+  el.querySelectorAll('[data-ob-xproj]').forEach(i => { ob.extras.res.projects[+i.dataset.obXproj].keep = i.checked; });
   const w = el.querySelector('[data-ob-weight]');
   if (w) ob.weight = parseFloat(String(w.value).replace(',', '.')) || '';
 }
@@ -278,7 +301,10 @@ function onboardingClick(e) {
   const t = e.target.closest('button');
   if (!t) return;
   readOnboardingFields();
-  if (t.dataset.obChip) {
+  if (t.dataset.obMore) {
+    ob.more[t.dataset.obMore] = true;
+    renderOnboarding();
+  } else if (t.dataset.obChip) {
     const g = t.dataset.obChip;
     const id = t.dataset.id;
     if (g === 'situation') ob.p.situation = ob.p.situation === id ? '' : id;
@@ -290,6 +316,7 @@ function onboardingClick(e) {
     renderOnboarding();
   } else if (t.dataset.obNav === 'next') {
     if (obVisibleSteps()[ob.step] === 'life' && ob.lifeText && ob.lifeText !== ob.analyzedText) startLifeAnalysis();
+    if (['sports', 'interests', 'goals'].includes(obVisibleSteps()[ob.step])) startExtrasAnalysis();
     ob.step++;
     renderOnboarding(1);
   }
@@ -341,15 +368,16 @@ function closeOnboarding() {
 function buildIdeas(p) {
   const out = [];
   SPORTS.filter(([id]) => p.sports.includes(id)).forEach(([, title, duration]) => out.push({ title, category: 'sport', duration }));
-  if (p.otherSport) p.otherSport.split(/[,;]/).map(s => s.trim()).filter(Boolean).forEach(title => out.push({ title: title[0].toUpperCase() + title.slice(1), category: 'sport', duration: 60 }));
   INTERESTS.filter(([id]) => p.interests.includes(id)).forEach(([, title, category, duration, at]) => out.push({ title, category, duration, ...(at ? { at } : {}) }));
-  if (p.otherInterest) p.otherInterest.split(/[,;]/).map(s => s.trim()).filter(Boolean).forEach(title => out.push({ title: title[0].toUpperCase() + title.slice(1), category: 'loisirs', duration: 90 }));
   ALWAYS_IDEAS.forEach(([title, category, duration]) => out.push({ title, category, duration }));
+  // Ce que l'utilisateur a écrit avec ses mots, interprété par l'analyse (et validé au récapitulatif)
+  extrasResult(p).ideas.filter(i => i.keep).forEach(({ title, category, duration, at }) => out.push({ title, category, duration, ...(at ? { at } : {}) }));
   return out;
 }
 
 function projectsFromGoals(p) {
   const out = [];
+  if (p === ob?.p) extrasResult(p).projects.filter(x => x.keep).forEach(x => out.push({ ...newProject('custom'), title: x.title, icon: x.icon || '🎯', category: x.category, weeklyMinutes: x.weeklyMinutes, session: x.session }));
   p.goals.forEach(g => {
     if (g === 'aws') out.push(newProject('aws'));
     else if (g === 'code') out.push(newProject('code'));
@@ -357,7 +385,7 @@ function projectsFromGoals(p) {
     else if (g === 'cert') out.push({ ...newProject('custom'), title: `Certification ${p.certName || ''}`.trim(), icon: '🎓', type: 'cert', category: 'etudes', weeklyMinutes: 150 });
     else if (g === 'language') out.push({ ...newProject('custom'), title: `Apprendre ${p.language ? `l'${p.language}`.replace(/^l'([^aeiouyh])/i, 'le $1') : 'une langue'}`, icon: '🗣️', type: 'learning', category: 'etudes', weeklyMinutes: 105, session: 30 });
     else if (g === 'instrument') out.push({ ...newProject('custom'), title: 'Jouer d\'un instrument', icon: '🎸', category: 'loisirs', weeklyMinutes: 120, session: 30 });
-    else out.push({ ...newProject('custom'), title: 'Mon projet' });
+    else if (!extrasResult(p).projects.length) out.push({ ...newProject('custom'), title: 'Mon projet' });
   });
   return out;
 }

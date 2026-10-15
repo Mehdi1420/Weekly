@@ -538,3 +538,9 @@ main .subtitle { padding-left: 58px; margin-top: -8px; }
 .wg-ico { margin-right: 3px; font-size: 11px; }
 .idea { gap: 12px; }
 main .header h1 { font-size: clamp(25px, 7.4vw, 34px); }
+
+/* Questionnaire : cadre libre sous les choix */
+.field label.free { flex-direction: column; align-items: stretch; gap: 6px; }
+.field label.free > span { font-weight: 600; font-size: 15px; }
+.field label.free textarea { text-align: left; min-height: 0; font-size: 16px; line-height: 1.4; }
+.more-chip { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--sec) 45%, var(--line)); color: var(--accent); font-weight: 600; }
