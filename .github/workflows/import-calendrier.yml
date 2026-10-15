@@ -1,8 +1,8 @@
 name: Import calendrier
 
-# Télécharge le calendrier Moodle (et éventuellement l'emploi du temps) et le dépose
-# dans le gist secret que l'app lit à chaque ouverture.
-# Secrets : MOODLE_ICS_URL (un lien par ligne), GIST_ID, GIST_TOKEN (clé limitée aux gists).
+# Télécharge le calendrier Moodle (cours.ics) et l'agenda personnel Google / iPhone (agenda.ics)
+# et les dépose dans le gist secret que l'app lit à chaque ouverture.
+# Secrets : MOODLE_ICS_URL et/ou AGENDA_ICS_URL (un lien par ligne), GIST_ID, GIST_TOKEN (clé limitée aux gists).
 on:
   schedule:
     - cron: '17 */3 * * *'
@@ -14,34 +14,53 @@ jobs:
     steps:
       - name: Télécharger les calendriers et les déposer dans le gist
         env:
-          ICS_URLS: ${{ secrets.MOODLE_ICS_URL }}
+          MOODLE_URLS: ${{ secrets.MOODLE_ICS_URL }}
+          AGENDA_URLS: ${{ secrets.AGENDA_ICS_URL }}
           GIST_ID: ${{ secrets.GIST_ID }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${ICS_URLS}" ] || [ -z "${GIST_ID}" ] || [ -z "${GIST_TOKEN}" ]; then
-            echo "Secrets manquants : MOODLE_ICS_URL, GIST_ID et GIST_TOKEN (voir le README)."
+          if [ -z "${GIST_ID}" ] || [ -z "${GIST_TOKEN}" ]; then
+            echo "Secrets manquants : GIST_ID et GIST_TOKEN (voir le README)."
             exit 1
           fi
-          : > cours.ics
-          n=0
-          while IFS= read -r url; do
-            url="$(echo "$url" | tr -d '\r' | xargs)"
-            [ -z "$url" ] && continue
-            n=$((n + 1))
-            if ! curl -fsSL --max-time 60 "$url" >> cours.ics; then
-              echo "Le lien n°$n ne répond pas (lien expiré ou Moodle indisponible)."
+          if [ -z "${MOODLE_URLS}" ] && [ -z "${AGENDA_URLS}" ]; then
+            echo "Aucun calendrier configuré : ajoute MOODLE_ICS_URL et/ou AGENDA_ICS_URL."
+            exit 1
+          fi
+          # Télécharge chaque lien (webcal:// devient https://) dans le fichier donné
+          fetch_all() {
+            local urls="$1" out="$2" n=0
+            : > "$out"
+            while IFS= read -r url; do
+              url="$(echo "$url" | tr -d '\r' | xargs)"
+              [ -z "$url" ] && continue
+              url="${url/#webcal:\/\//https://}"
+              n=$((n + 1))
+              if ! curl -fsSL --max-time 60 "$url" >> "$out"; then
+                echo "Le lien n°$n de $out ne répond pas (lien expiré ou service indisponible)."
+                exit 1
+              fi
+              echo >> "$out"
+            done <<< "$urls"
+            if ! grep -q "BEGIN:VCALENDAR" "$out"; then
+              echo "$out : le contenu reçu n'est pas un calendrier, vérifie le lien."
               exit 1
             fi
-            echo >> cours.ics
-          done <<< "${ICS_URLS}"
-          if ! grep -q "BEGIN:VCALENDAR" cours.ics; then
-            echo "Le contenu reçu n'est pas un calendrier : vérifie le lien d'export Moodle."
-            exit 1
+            echo "$out : $(grep -c 'BEGIN:VEVENT' "$out") événements."
+          }
+          files='{}'
+          if [ -n "${MOODLE_URLS}" ]; then
+            fetch_all "${MOODLE_URLS}" cours.ics
+            files="$(jq --rawfile c cours.ics '. + {"cours.ics": {content: $c}}' <<< "$files")"
           fi
-          jq -n --rawfile c cours.ics '{files: {"cours.ics": {content: $c}}}' > body.json
+          if [ -n "${AGENDA_URLS}" ]; then
+            fetch_all "${AGENDA_URLS}" agenda.ics
+            files="$(jq --rawfile c agenda.ics '. + {"agenda.ics": {content: $c}}' <<< "$files")"
+          fi
+          jq -n --argjson f "$files" '{files: $f}' > body.json
           curl -fsS -X PATCH \
             -H "Authorization: Bearer ${GIST_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/gists/${GIST_ID}" --data @body.json > /dev/null
-          echo "$(grep -c 'BEGIN:VEVENT' cours.ics) événements envoyés dans le gist."
+          echo "Calendriers envoyés dans le gist."

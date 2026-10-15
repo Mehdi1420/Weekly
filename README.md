@@ -4,11 +4,12 @@ Application iPhone personnelle pour organiser mon emploi du temps, choisir mes a
 
 C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouvre en plein écran et fonctionne hors connexion. Les données restent sur le téléphone (stockage local).
 
-## Fonctionnalités (v1.0)
+## Fonctionnalités (v1.1)
 
 **Personnalisée pour chaque utilisateur.** Au premier lancement, un questionnaire de bienvenue configure l'app : prénom, modules utiles, **ta semaine décrite librement en quelques phrases** (travail, alternance, cours, horaires, sport, habitudes : analysée par l'IA Gemini si une clé est donnée, sinon par un analyseur intégré ; les activités régulières deviennent des routines bloquées dans le planning et les étapes suivantes sont pré-remplies) (études et projets, forme), rythme (statut, heure à partir de laquelle on est libre, coucher, début du week-end), sports pratiqués et nombre de séances visé, centres d'intérêt, objectifs perso (certification AWS ou autre, programmation, langue, lecture et genres préférés, instrument…), profil santé. L'app en déduit les idées d'activités, les projets, les plages horaires où elle propose des choses et les onglets affichés, puis continue d'apprendre des habitudes. Le questionnaire peut être refait dans Réglages, sans perdre de données.
 
-- **Semaine** : vue du lundi au dimanche, ajout et modification d'activités, temps total par catégorie.
+- **Semaine** : grille horaire (jours en colonnes, heures en lignes, ligne de l'heure actuelle). Sur iPhone, 3 jours visibles à faire glisser, en commençant par aujourd'hui ; sur ordinateur, la semaine entière. Toucher un créneau vide ajoute une activité à cette heure. Temps total par catégorie.
+- **Version ordinateur** : même adresse dans n'importe quel navigateur ; menu sur le côté, semaine en pleine largeur, fenêtres centrées.
 - **Apprentissage des habitudes** (tout est calculé sur le téléphone)
   - **Routines** : une activité peut se répéter (chaque semaine, en semaine, le week-end, tous les jours) et se crée toute seule les semaines suivantes. Modifier une occurrence demande si le changement vaut aussi pour les prochaines fois ; « Sauter cette fois » ou « Arrêter la routine ».
   - **Détection automatique** : une activité notée au moins 2 semaines le même jour (une semaine sur deux ou plus, sur les 8 dernières) est proposée comme routine, avec l'heure et la durée habituelles.
@@ -34,9 +35,13 @@ C'est une web app installable (PWA) : elle s'ajoute à l'écran d'accueil, s'ouv
 ## Installer sur l'iPhone
 
 1. Publier le dépôt avec GitHub Pages (Settings → Pages → Deploy from a branch → `main`, dossier `/ (root)`).
-2. Ouvrir `https://mehdi1420.github.io/test/` dans **Safari**.
+2. Ouvrir `https://mehdi1420.github.io/Weekly/` dans **Safari**.
 3. Bouton Partager → **Sur l'écran d'accueil**. Ouvrir ensuite l'app depuis son icône.
 
+
+### Place sur l'appareil
+
+Le stockage local du navigateur est limité (environ 5 Mo). Quand l'app s'en approche, elle supprime d'elle-même, petit à petit, les données les plus anciennes : d'abord le cache de l'IA, puis mois par mois les plus vieux repas, activités et pas, en gardant toujours au moins les 6 derniers mois (ou moins seulement si nécessaire), ainsi que les pesées, routines, projets, livres et devoirs. Avec un compte, ce nettoyage s'applique aussi aux données synchronisées.
 
 ### Mises à jour : rien à réinstaller
 
@@ -51,7 +56,7 @@ Mise en place (une seule fois) :
 1. Créer un compte gratuit sur **supabase.com** → **New project** (région Europe, mot de passe de base au choix).
 2. **SQL Editor** → **New query** → coller le contenu de `supabase/schema.sql` → **Run**. Cela crée la table des données avec les règles de sécurité : chaque utilisateur ne peut lire et modifier que ses propres données.
 3. **Authentication** → **Sign In / Providers** → **Email** : laisser activé. Pour se connecter tout de suite après l'inscription, désactiver **Confirm email** (sinon un lien de confirmation est envoyé par e-mail).
-4. **Authentication** → **URL Configuration** → **Site URL** : `https://mehdi1420.github.io/test/` (pour les liens « mot de passe oublié »).
+4. **Authentication** → **URL Configuration** → **Site URL** : `https://mehdi1420.github.io/Weekly/` (pour les liens « mot de passe oublié »).
 5. **Project Settings** → **API Keys** (ou **Data API**) : copier l'**URL du projet** et la **clé publique** (*publishable* ou *anon*), puis les mettre dans `config.js`.
 
 La clé publique est faite pour être visible dans le code d'un site : la sécurité repose sur les règles de la base (étape 2). Ne jamais mettre la clé *secret* / *service_role* dans l'app.
@@ -98,6 +103,18 @@ Le bouton **Synchroniser avec Santé** lance aussi le raccourci à la demande : 
 ### Mode manuel (sans GitHub)
 
 Même raccourci, mais en remplaçant l'étape 4 par **Copier dans le presse-papiers**. Dans l'app : **Synchroniser avec Santé**, revenir dans l'app (lien « ◀ » en haut à gauche) et toucher **Coller les pas importés**. Un simple nombre collé ou saisi (**Saisir**) fonctionne aussi.
+
+## Importer son agenda Google ou iPhone (une seule fois)
+
+Les rendez-vous de l'agenda apparaissent dans la semaine (catégorie devinée d'après le titre : réunion → travail, dentiste → santé, etc.) et l'app ne propose rien sur ces créneaux. Les événements répétés sont développés sur les 8 semaines à venir (exceptions et occurrences déplacées comprises) ; les événements sur une journée entière sont ignorés.
+
+1. Récupérer le lien privé de l'agenda au format iCal :
+   - **Google Agenda** (sur ordinateur) : calendar.google.com → ⚙️ Paramètres → cliquer sur l'agenda à gauche → **Intégrer l'agenda** → **Adresse secrète au format iCal**.
+   - **Calendrier iPhone (iCloud)** : app Calendrier → Calendriers → ⓘ à côté de l'agenda → activer **Calendrier public** → **Partager le lien**. (Toute personne ayant le lien peut voir cet agenda.)
+2. Dans le dépôt GitHub : secret **`AGENDA_ICS_URL`** = ce lien (un lien par ligne pour plusieurs agendas ; `webcal://` est accepté). Les secrets `GIST_ID` et `GIST_TOKEN` (synchro des pas) sont nécessaires.
+3. Onglet **Actions** → **Import calendrier** → **Run workflow**. Ensuite l'import tourne toutes les 3 heures (avec Moodle s'il est configuré).
+
+Sans GitHub : Réglages → Agenda → **importer un fichier .ics**.
 
 ## Importer les cours et devoirs Moodle (une seule fois)
 

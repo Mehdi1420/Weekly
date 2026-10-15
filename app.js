@@ -44,10 +44,65 @@ function load() {
 }
 
 let data = load();
+// ---------- Place disponible sur l'appareil ----------
+// Le navigateur limite le stockage local (environ 5 Mo). Quand on s'en approche, les données les plus
+// anciennes sont supprimées petit à petit (mois par mois), en gardant toujours les derniers mois,
+// les poids, les routines, les projets, les livres et les devoirs.
+const STORAGE_SOFT_LIMIT = 2000000; // caractères (≈ 4 Mo en mémoire) : marge sous la limite du navigateur
+const STORAGE_TARGET = 1600000;
+const KEEP_DAYS_STEPS = [180, 120, 60, 30];
+
+function pruneOldData(target) {
+  const size = () => JSON.stringify(data).length;
+  if (size() <= target) return 0;
+  let removed = 0;
+  // 1. Le cache de l'IA (recalculable) en premier, des plus anciennes entrées aux plus récentes
+  const cache = data.learn && data.learn.aiCache;
+  if (cache) {
+    const keys = Object.keys(cache);
+    while (keys.length && size() > target) { delete cache[keys.shift()]; removed++; }
+  }
+  // 2. Puis le mois le plus ancien des repas, activités et pas, sans toucher aux derniers mois
+  for (const keepDays of KEEP_DAYS_STEPS) {
+    const minDate = toISO(addDays(new Date(), -keepDays));
+    while (size() > target) {
+      const oldest = [...data.food.map(f => f.date), ...data.events.map(e => e.date), ...Object.keys(data.steps)]
+        .filter(d => d && d < minDate).sort()[0];
+      if (!oldest) break;
+      const month = oldest.slice(0, 7);
+      const old = d => d && d.startsWith(month) && d < minDate;
+      const before = data.food.length + data.events.length;
+      data.food = data.food.filter(f => !old(f.date));
+      data.events = data.events.filter(e => !old(e.date));
+      Object.keys(data.steps).forEach(d => { if (old(d)) delete data.steps[d]; });
+      removed += before - data.food.length - data.events.length;
+    }
+    if (size() <= target) break;
+  }
+  return removed;
+}
+
 // Enregistre sur l'appareil, puis (avec un compte) envoie au serveur quelques instants plus tard
 function save() {
   data.meta = { ...(data.meta || {}), updatedAt: Date.now() };
-  localStorage.setItem(storageKeyFor(getSession()), JSON.stringify(data));
+  const key = storageKeyFor(getSession());
+  let json = JSON.stringify(data);
+  if (json.length > STORAGE_SOFT_LIMIT && pruneOldData(STORAGE_TARGET)) {
+    json = JSON.stringify(data);
+    toast('Place libérée : les données les plus anciennes ont été supprimées');
+  }
+  try {
+    localStorage.setItem(key, json);
+  } catch (e) {
+    // Limite atteinte plus tôt que prévu (selon l'appareil) : on libère davantage et on réessaie
+    pruneOldData(Math.floor(json.length * 0.7));
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      toast('Place libérée : les données les plus anciennes ont été supprimées');
+    } catch {
+      toast('Stockage plein : exporte tes données dans Réglages');
+    }
+  }
   cloudSchedulePush();
 }
 
@@ -83,6 +138,7 @@ const state = {
   weightTip: null,
   proposals: [],
   todayDismissed: false,
+  gridScroll: null,
 };
 
 const view = document.getElementById('view');
@@ -101,6 +157,7 @@ function toast(msg) {
 }
 
 function render() {
+  view.classList.toggle('wide', state.tab === 'week');
   // Onglets selon les modules choisis au questionnaire
   const mods = prefs().modules;
   const hidden = { goals: !mods.goals, health: !mods.forme };
@@ -193,33 +250,111 @@ function renderWeek() {
       `<span class="chip"><span class="dot" style="background:${cat(c).color}"></span>${cat(c).name} · ${fmtDuration(m)}</span>`).join('')}</div>`;
   }
 
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(start, i);
-    const iso = toISO(d);
-    const items = [...eventsOn(iso), ...proposals.filter(p => p.date === iso).map(p => ({ ...p, proposal: true }))]
-      .sort((a, b) => a.start.localeCompare(b.start));
-    html += `
-      <section class="day ${iso === todayISO ? 'today' : ''}">
-        <div class="day-head">
-          <span class="day-title">${fmtDay(d)}</span>
-          <button class="day-add" data-action="add" data-date="${iso}" aria-label="Ajouter">+</button>
-        </div>
-        ${items.length ? `<div class="day-list">${items.map(e => e.proposal ? `
-          <div class="event ghost">
-            <span class="bar" style="background:${cat(e.category).color}"></span>
-            <span class="time">${e.start}<br>${e.end}</span>
-            <span class="grow"><div class="title">✨ ${esc(e.title)}</div><div class="note">Suggestion</div></span>
-            <button class="mini no" data-action="prop-no" data-id="${e.id}" aria-label="Refuser">✕</button>
-            <button class="mini ok" data-action="prop-ok" data-id="${e.id}" aria-label="Accepter">✓</button>
-          </div>` : `
-          <button class="event ${e.done ? 'done' : ''}" data-action="edit" data-id="${e.id}">
-            <span class="bar" style="background:${cat(e.category).color}"></span>
-            <span class="time">${e.start}<br>${e.end}</span>
-            <span><div class="title">${esc(e.title)}${e.routineId ? ' <span class="routine-icon" title="Routine">↻</span>' : ''}</div>${e.notes ? `<div class="note">${esc(e.notes)}</div>` : ''}</span>
-          </button>`).join('')}</div>` : '<div class="empty">Rien de prévu</div>'}
-      </section>`;
-  }
+  html += renderWeekGrid(start, proposals, todayISO);
   view.innerHTML = html;
+  placeGridScroll(isCurrent);
+}
+
+// ---------- Grille de la semaine : jours en colonnes, heures en lignes ----------
+
+const DAY_SHORT = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+
+// Répartit les activités qui se chevauchent sur plusieurs colonnes (« voies »)
+function layoutDay(items) {
+  items.sort((a, b) => a.s - b.s || b.e - a.e);
+  const out = [];
+  let cluster = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    const lanes = [];
+    cluster.forEach(it => {
+      let l = lanes.findIndex(end => end <= it.s);
+      if (l < 0) { l = lanes.length; lanes.push(0); }
+      lanes[l] = it.e;
+      it.lane = l;
+    });
+    cluster.forEach(it => { it.lanes = lanes.length; });
+    out.push(...cluster);
+    cluster = [];
+  };
+  items.forEach(it => {
+    if (cluster.length && it.s >= clusterEnd) { flush(); clusterEnd = -1; }
+    cluster.push(it);
+    clusterEnd = Math.max(clusterEnd, it.e);
+  });
+  if (cluster.length) flush();
+  return out;
+}
+
+function renderWeekGrid(start, proposals, todayISO) {
+  const days = [...Array(7)].map((_, i) => toISO(addDays(start, i)));
+  const all = days.flatMap(iso => [...eventsOn(iso), ...proposals.filter(p => p.date === iso)]);
+  // Plage horaire affichée : 7 h – minuit, élargie si une activité dépasse
+  const first = Math.min(7 * 60, ...all.map(e => toMin(e.start)));
+  const last = Math.max(24 * 60, ...all.map(e => Math.max(toMin(e.end), toMin(e.start) + 30)));
+  const h0 = Math.floor(first / 60);
+  const h1 = Math.min(24, Math.ceil(last / 60));
+  const top = m => ((m - h0 * 60) / 60) * 100; // en « heures × 100 », converti en px par la variable CSS
+  const now = nowMinutes();
+
+  const cols = days.map(iso => {
+    const span = x => ({ s: toMin(x.start), e: Math.max(toMin(x.end), toMin(x.start) + 20) });
+    const items = layoutDay([
+      ...eventsOn(iso).map(ev => ({ item: ev, ...span(ev) })),
+      ...proposals.filter(p => p.date === iso).map(p => ({ item: { ...p, proposal: true }, ...span(p) })),
+    ]);
+    const blocks = items.map(({ item: ev, s, e, lane, lanes }) => {
+      const c = cat(ev.category).color;
+      const style = `top:calc(var(--hour) * ${top(s) / 100});height:calc(var(--hour) * ${(e - s) / 60} - 2px);left:calc(${(lane / lanes) * 100}% + 1px);width:calc(${100 / lanes}% - 3px);--c:${c}`;
+      const short = e - s < 45;
+      if (ev.proposal) {
+        return `<div class="wg-ev ghost ${short ? 'short' : ''}" style="${style}" data-action="noop">
+          <div class="wg-t">✨ ${esc(ev.title)}</div>${short ? '' : `<div class="wg-h">${ev.start}–${ev.end}</div>`}
+          <div class="wg-acts"><button class="mini no" data-action="prop-no" data-id="${ev.id}" aria-label="Refuser">✕</button><button class="mini ok" data-action="prop-ok" data-id="${ev.id}" aria-label="Accepter">✓</button></div>
+        </div>`;
+      }
+      return `<button class="wg-ev ${ev.done ? 'done' : ''} ${short ? 'short' : ''}" style="${style}" data-action="edit" data-id="${ev.id}">
+        <div class="wg-t">${esc(ev.title)}${ev.routineId ? ' <span class="routine-icon">↻</span>' : ''}</div>
+        ${short ? '' : `<div class="wg-h">${ev.start}–${ev.end}</div>`}
+      </button>`;
+    }).join('');
+    const nowLine = iso === todayISO && now >= h0 * 60 && now <= h1 * 60
+      ? `<div class="wg-now" style="top:calc(var(--hour) * ${top(now) / 100})"></div>` : '';
+    return `<div class="wg-col ${iso === todayISO ? 'today' : ''}" data-action="grid-add" data-date="${iso}" data-h0="${h0}">${blocks}${nowLine}</div>`;
+  });
+
+  const heads = days.map((iso, i) => {
+    const d = fromISO(iso);
+    return `<button class="wg-day ${iso === todayISO ? 'today' : ''}" data-action="add" data-date="${iso}">
+      <span>${DAY_SHORT[i]}</span><b>${d.getDate()}</b></button>`;
+  }).join('');
+  const hours = [...Array(h1 - h0)].map((_, k) => `<div class="wg-hour">${String(h0 + k).padStart(2, '0')}:00</div>`).join('');
+
+  return `
+    <div class="wgrid" style="--rows:${h1 - h0}">
+      <div class="wg-scroll">
+        <div class="wg-inner">
+          <div class="wg-head"><div class="wg-gutter"></div>${heads}</div>
+          <div class="wg-body"><div class="wg-times">${hours}</div>${cols.join('')}</div>
+        </div>
+      </div>
+    </div>
+    <p class="help" style="margin:6px 4px 0">Touche un créneau vide pour ajouter une activité à cette heure.</p>`;
+}
+
+// Garde la position de défilement horizontal ; sur la semaine en cours, démarre sur aujourd'hui
+function placeGridScroll(isCurrent) {
+  const sc = view.querySelector('.wg-scroll');
+  if (!sc) return;
+  const key = toISO(state.weekStart);
+  if (state.gridScroll && state.gridScroll.key === key) sc.scrollLeft = state.gridScroll.left;
+  else if (isCurrent) {
+    // Aujourd'hui en première colonne visible (après le rappel des heures)
+    const idx = [...sc.querySelectorAll('.wg-col')].findIndex(c => c.classList.contains('today'));
+    const colW = sc.querySelector('.wg-col').getBoundingClientRect().width;
+    if (idx > 0) requestAnimationFrame(() => { sc.scrollLeft = Math.round(idx * colW); });
+  }
+  sc.addEventListener('scroll', () => { state.gridScroll = { key, left: sc.scrollLeft }; }, { passive: true });
 }
 
 // Carte « Aujourd'hui » : en cours / à suivre, activités passées à cocher, créneau libre à remplir
@@ -365,6 +500,9 @@ function renderSettings() {
     <div class="section-title">Pas (app Santé)</div>
     <button class="secondary" data-action="steps-gist">${data.settings.stepsGist ? 'Synchro automatique activée · modifier' : 'Activer la synchro automatique'}</button>
     <p class="help">Une automatisation iPhone envoie tes pas plusieurs fois par jour ; l'app les récupère toute seule à l'ouverture. Mise en route dans le README.</p>
+    <div class="section-title">Agenda (Google ou iPhone)</div>
+    <button class="secondary" data-action="agenda-help">${data.settings.agendaSyncedAt ? `📅 Agenda importé ${fmtAgo(data.settings.agendaSyncedAt)}` : 'Importer mon agenda'}</button>
+    <p class="help">Tes rendez-vous apparaissent dans ta semaine et l'app planifie autour.</p>
     <div class="section-title">Recherche des calories</div>
     <button class="secondary" data-action="ai-mode">Recherche IA : ${AI_MODES[aiMode()]}</button>
     <p class="help">Avec Gemini, chaque repas tapé est analysé automatiquement par l'IA (gratuit, clé à créer une fois). Sans IA, l'app utilise sa base intégrée de plats courants.</p>
@@ -377,7 +515,7 @@ function renderSettings() {
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
     ${cloudEnabled() && getSession() ? '<button class="danger" data-action="delete-cloud" style="margin-top:10px">Supprimer mes données du serveur</button>' : ''}
-    <p class="help">Ma Semaine · version 1.0</p>`;
+    <p class="help">Ma Semaine · version 1.1</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -421,6 +559,7 @@ function openEventSheet(ev, isNew) {
     let end = f.get('end');
     if (toMin(end) <= toMin(start)) end = fromMin(Math.min(toMin(start) + 60, 23 * 60 + 59));
     const wasDone = ev.done;
+    if (ev.extId && f.get('category') !== ev.category) ev.categoryEdited = true; // garder ce choix aux prochains imports
     Object.assign(ev, {
       title: f.get('title').trim(), date: f.get('date'), start, end,
       category: f.get('category'), notes: f.get('notes').trim(), done: f.get('done') === 'on',
@@ -1135,6 +1274,19 @@ async function fetchStepsFromGist(force = false) {
       save();
       if (['week', 'goals'].includes(state.tab) && !sheet.open) render();
     }
+    // Agenda personnel (Google / iPhone) déposé par la même GitHub Action
+    const agenda = gist.files[AGENDA_FILE];
+    if (agenda) {
+      const ics = await read(agenda);
+      const sig = `${ics.length}:${ics.slice(-200)}:${toISO(new Date())}`; // réimport au moins une fois par jour (fenêtre glissante)
+      if (sig !== data.settings.agendaSig) {
+        importAgenda(ics);
+        data.settings.agendaSig = sig;
+      }
+      data.settings.agendaSyncedAt = gist.updated_at;
+      save();
+      if (['week', 'goals'].includes(state.tab) && !sheet.open) render();
+    }
     const file = gist.files[GIST_FILE];
     const totals = file ? parseSteps(await read(file), toISO(new Date(gist.updated_at))) : {};
     let changed = gist.updated_at !== data.settings.stepsSyncedAt || !!state.gistError;
@@ -1349,6 +1501,13 @@ view.addEventListener('click', e => {
   if (!b) return;
   const { action, id, date } = b.dataset;
   switch (action) {
+    case 'grid-add': {
+      // Heure touchée, arrondie à la demi-heure
+      const hourPx = b.getBoundingClientRect().height / (+getComputedStyle(b.closest('.wgrid')).getPropertyValue('--rows'));
+      const m = +b.dataset.h0 * 60 + Math.floor(((e.clientY - b.getBoundingClientRect().top) / hourPx) * 2) * 30;
+      openEventSheet(newEvent(date, { start: fromMin(Math.min(m, 23 * 60)) }), true);
+      break;
+    }
     case 'prev': state.weekStart = addDays(state.weekStart, -7); render(); break;
     case 'next': state.weekStart = addDays(state.weekStart, 7); render(); break;
     case 'today': state.weekStart = startOfWeek(new Date()); render(); break;
@@ -1427,6 +1586,7 @@ view.addEventListener('click', e => {
     }
     case 'books-chatgpt': booksChatGPT(); break;
     case 'moodle-help': openMoodleHelp(); break;
+    case 'agenda-help': openAgendaHelp(); break;
     case 'onboarding': startOnboarding(); break;
     case 'login': showAuth('login'); break;
     case 'logout':
