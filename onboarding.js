@@ -164,10 +164,10 @@ function renderOnboarding(dir = 0) {
     const pr = ob.profile;
     body = `
       <h1>Ton profil santé</h1>
-      <p class="ob-lead">Pour calculer tes besoins caloriques. Reste sur ton téléphone.</p>
+      <p class="ob-lead">Pour calculer tes besoins caloriques. Visible de toi seul.</p>
       <div class="field">
         <label>Sexe <select data-obp="sex"><option value="">–</option><option value="h" ${pr.sex === 'h' ? 'selected' : ''}>Homme</option><option value="f" ${pr.sex === 'f' ? 'selected' : ''}>Femme</option></select></label>
-        <label>Âge <input type="number" data-obp="age" inputmode="numeric" value="${pr.age || ''}"></label>
+        <label>Date de naissance <input type="date" data-obp="birth" min="1900-01-01" max="${toISO(new Date())}" value="${pr.birth || ''}"></label>
         <label>Taille (cm) <input type="number" data-obp="height" inputmode="numeric" value="${pr.height || ''}"></label>
         <label>Poids (kg) <input type="number" data-ob-weight step="0.1" inputmode="decimal" value="${ob.weight}"></label>
         <label>Objectif <select data-obp="goal">

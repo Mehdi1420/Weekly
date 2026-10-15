@@ -511,7 +511,7 @@ function renderSettings() {
     <button class="secondary" data-action="onboarding">Refaire le questionnaire (goûts, horaires, modules)</button>
     <p class="help">Sports, centres d'intérêt, horaires, objectifs et modules affichés. Tes données sont conservées.</p>
     <div class="section-title">Profil (pour l'objectif calorique)</div>
-    <button class="secondary" data-action="profile">${profileComplete() ? `${p.sex === 'f' ? 'Femme' : 'Homme'} · ${p.age} ans · ${p.height} cm` : 'Renseigner mon profil'}</button>
+    <button class="secondary" data-action="profile">${profileComplete() ? `${p.sex === 'f' ? 'Femme' : 'Homme'} · ${ageOf(p)} ans · ${p.height} cm` : 'Renseigner mon profil'}</button>
     <div class="section-title">Rappel du dimanche</div>
     <button class="secondary" data-action="enable-push">${data.settings.pushSub ? 'Voir mon code de notification' : 'Activer les notifications'}</button>
     <p class="help">Chaque dimanche matin, une notification te rappelle de te peser. La mise en route (une seule fois) est expliquée dans le README.</p>
@@ -743,7 +743,7 @@ function latestWeight() {
 
 function profileComplete() {
   const p = data.profile;
-  return p.sex && p.age > 0 && p.height > 0;
+  return p.sex && ageOf(p) > 0 && p.height > 0;
 }
 
 // Calories dépensées en marchant : environ 0,5 kcal par pas et par 1 000 kg (≈ 0,035 kcal/pas à 70 kg)
@@ -821,7 +821,7 @@ function weeklyMaintenance() {
 function formulaMaintenance() {
   if (!profileComplete()) return null;
   const p = data.profile;
-  const bmr = 10 * (latestWeight() || 70) + 6.25 * p.height - 5 * p.age + (p.sex === 'f' ? -161 : 5);
+  const bmr = 10 * (latestWeight() || 70) + 6.25 * p.height - 5 * ageOf(p) + (p.sex === 'f' ? -161 : 5);
   return bmr * 1.2;
 }
 
@@ -1472,6 +1472,15 @@ function openWeightSheet() {
 
 // --- Profil & réglages ---
 
+// Âge calculé à partir de la date de naissance (les anciens profils n'ont qu'un âge fixe)
+function ageOf(p) {
+  if (!p || !p.birth) return (p && p.age) || 0;
+  const b = fromISO(p.birth), now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) a--;
+  return a > 0 && a < 120 ? a : 0;
+}
+
 function openProfileSheet() {
   const p = data.profile;
   sheetForm.innerHTML = `
@@ -1482,7 +1491,7 @@ function openProfileSheet() {
     </div>
     <div class="field">
       <label>Sexe <select name="sex"><option value="h" ${p.sex === 'h' ? 'selected' : ''}>Homme</option><option value="f" ${p.sex === 'f' ? 'selected' : ''}>Femme</option></select></label>
-      <label>Âge <input type="number" name="age" min="10" max="110" inputmode="numeric" value="${p.age || ''}" required></label>
+      <label>Date de naissance <input type="date" name="birth" min="1900-01-01" max="${toISO(new Date())}" value="${p.birth || ''}" required></label>
       <label>Taille (cm) <input type="number" name="height" min="100" max="250" inputmode="numeric" value="${p.height || ''}" required></label>
       <label>Objectif <select name="goal">
         <option value="perdre" ${p.goal === 'perdre' ? 'selected' : ''}>Perdre du poids</option>
@@ -1490,11 +1499,11 @@ function openProfileSheet() {
         <option value="prendre" ${p.goal === 'prendre' ? 'selected' : ''}>Prendre du poids</option>
       </select></label>
     </div>
-    <p class="help">Le poids utilisé est celui de ta dernière pesée.</p>`;
+    <p class="help">L'âge est calculé tout seul à partir de ta date de naissance. Le poids utilisé est celui de ta dernière pesée.</p>`;
   sheetForm.onsubmit = e => {
     e.preventDefault();
     const f = new FormData(sheetForm);
-    data.profile = { sex: f.get('sex'), age: +f.get('age'), height: +f.get('height'), goal: f.get('goal') };
+    data.profile = { sex: f.get('sex'), birth: f.get('birth'), height: +f.get('height'), goal: f.get('goal') };
     save();
     sheet.close();
     render();
