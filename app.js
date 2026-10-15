@@ -229,6 +229,15 @@ function renderWeek() {
         <div class="row"><button class="secondary" data-action="life-later">Plus tard</button><button class="primary" data-action="life-describe">Décrire ma semaine</button></div>
       </div>`;
   }
+  if (isCurrent && prepareDue()) {
+    html += `
+      <div class="suggestion">
+        <div class="label">C'est dimanche</div>
+        <div class="idea-title" style="margin:4px 0 6px">Prépare ta semaine prochaine</div>
+        <div class="idea-meta" style="margin-bottom:10px">Devoirs à rendre, activités prévues, propositions pour ton temps libre : 2 minutes pour partir serein.</div>
+        <button class="primary" data-action="prepare-week">🗓️ Préparer ma semaine</button>
+      </div>`;
+  }
   if (isCurrent) html += renderToday();
 
   const detected = isPast ? null : detectRoutines()[0];
@@ -1382,6 +1391,54 @@ function editSteps() {
 
 // --- Poids ---
 
+// ---------- Préparer la semaine (dimanche 17 h) ----------
+
+const nextWeekStart = () => addDays(startOfWeek(new Date()), 7);
+// Le dimanche à partir de 17 h, tant que la semaine suivante n'a pas été préparée
+function prepareDue() {
+  const now = new Date();
+  return now.getDay() === 0 && now.getHours() >= 17 && data.settings.preparedWeek !== toISO(nextWeekStart());
+}
+
+function openPrepareSheet() {
+  const start = nextWeekStart();
+  const ws = toISO(start), we = toISO(addDays(start, 6));
+  data.settings.preparedWeek = ws;
+  save();
+  state.tab = 'week';
+  state.weekStart = start;
+  state.proposals = [];
+  render();
+  const events = data.events.filter(e => e.date >= ws && e.date <= we);
+  const tasks = (data.tasks || []).filter(t => !t.done && t.due && t.due.slice(0, 10) <= we).sort((a, b) => a.due.localeCompare(b.due));
+  const projects = (data.projects || []).filter(p => p.active);
+  const busy = events.reduce((m, e) => m + Math.max(0, toMin(e.end) - toMin(e.start)), 0);
+  sheetForm.innerHTML = `
+    <div class="sheet-head"><button type="button" class="text-btn" data-close>Fermer</button><h2>Prépare ta semaine</h2><span></span></div>
+    <p class="help" style="margin:0 4px 12px">Du ${fmtShort(start)} au ${fmtShort(addDays(start, 6))}</p>
+    <div class="card stats">
+      <div><div class="stat">${events.length}</div><div class="stat-label">activités prévues</div></div>
+      <div><div class="stat">${fmtDuration(busy) || '0'}</div><div class="stat-label">déjà occupées</div></div>
+      <div><div class="stat${tasks.length ? ' over' : ''}">${tasks.length}</div><div class="stat-label">à rendre</div></div>
+    </div>
+    ${tasks.length ? `<div class="section-title">À rendre</div><div class="list">${tasks.slice(0, 6).map(t => `
+      <div class="idea"><div class="idea-main"><div class="idea-title">${esc(t.title)}</div><div class="idea-meta">${t.course ? `${esc(t.course)} · ` : ''}${t.due.slice(0, 10) < ws ? '⚠️ en retard · ' : ''}${fmtShort(new Date(t.due))}</div></div></div>`).join('')}</div>` : ''}
+    ${projects.length ? `<p class="help" style="margin:10px 4px 0">🎯 Projets en cours : ${projects.map(p => esc(p.title)).join(', ')}. Leurs séances seront placées dans ton temps libre.</p>` : ''}
+    <div style="margin-top:16px">
+      <button type="button" class="primary" data-prep="propose">✨ Proposer ma semaine</button>
+      <button type="button" class="secondary" data-prep="change">💬 Un changement à signaler ?</button>
+    </div>`;
+  sheetForm.querySelector('[data-close]').onclick = () => sheet.close();
+  sheetForm.querySelector('[data-prep=propose]').onclick = () => {
+    sheet.close();
+    state.proposals = proposeWeek(state.weekStart);
+    render();
+    toast(state.proposals.length ? `${state.proposals.length} propositions : ✓ pour garder, ✕ pour refuser` : 'Pas de créneau libre ou d\'idée à proposer');
+  };
+  sheetForm.querySelector('[data-prep=change]').onclick = () => { sheet.close(); openUpdateSheet(); };
+  sheet.showModal();
+}
+
 function openWeightSheet() {
   const todayISO = toISO(new Date());
   sheetForm.innerHTML = `
@@ -1640,6 +1697,7 @@ view.addEventListener('click', e => {
     case 'safari-ok': state.safariDismissed = true; render(); break;
     case 'life-describe': startOnboarding('life'); break;
     case 'tell-weekly': openUpdateSheet(); break;
+    case 'prepare-week': openPrepareSheet(); break;
     case 'life-later': state.lifeDismissed = true; render(); break;
     case 'today-yes': {
       const idea = data.ideas.find(i => i.id === id);
@@ -1714,7 +1772,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Ouverture depuis la notification du dimanche
-if (new URLSearchParams(location.search).has('pesee')) {
+if (new URLSearchParams(location.search).has('preparer')) {
+  history.replaceState(null, '', location.pathname);
+  openPrepareSheet();
+} else if (new URLSearchParams(location.search).has('pesee')) {
   state.tab = 'health';
   history.replaceState(null, '', location.pathname);
   render();

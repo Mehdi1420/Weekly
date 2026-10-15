@@ -1,4 +1,4 @@
-// Envoie le rappel de pesée à l'iPhone (appelé par .github/workflows/rappel-pesee.yml)
+// Envoie une notification à l'iPhone (appelé par les workflows « Rappel pesée » et « Préparer la semaine »)
 import webpush from 'web-push';
 
 // PUSH_CONFIG : le code copié depuis l'app (Réglages → Activer les notifications)
@@ -8,11 +8,19 @@ if (!process.env.PUSH_CONFIG) {
 }
 const { subscription, vapidPublicKey, vapidPrivateKey } = JSON.parse(process.env.PUSH_CONFIG);
 
+// GitHub ne connaît que l'heure UTC : le workflow tourne à deux heures possibles et on n'envoie
+// qu'à la bonne heure de Paris (été comme hiver).
+const onlyAt = process.env.PUSH_ONLY_AT_PARIS_HOUR;
+if (onlyAt) {
+  const hour = +new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', hourCycle: 'h23' }).format(new Date());
+  if (hour !== +onlyAt) { console.log(`Il est ${hour} h à Paris, pas ${onlyAt} h : rien à envoyer.`); process.exit(0); }
+}
+
 webpush.setVapidDetails('mailto:ma-semaine@example.com', vapidPublicKey, vapidPrivateKey);
 const payload = JSON.stringify({
   title: 'Weekly',
   body: process.env.PUSH_BODY || "C'est dimanche : pense à te peser ⚖️",
-  url: './?pesee=1',
+  url: process.env.PUSH_URL || './?pesee=1',
 });
 
 try {

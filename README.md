@@ -140,6 +140,7 @@ Une GitHub Action (`.github/workflows/rappel-pesee.yml`) envoie chaque dimanche 
 2. Dans l'app installée : Réglages → **Activer les notifications** → accepter → **Copier le code**. L'app génère elle-même ses clés de notification ; ce code est personnel.
 3. Dans le dépôt GitHub : Settings → Secrets and variables → Actions → **New repository secret**, nom `PUSH_CONFIG`, valeur = le code copié.
 4. Tester : onglet Actions → *Rappel pesée* → **Run workflow**.
+5. Le même secret sert aussi au rappel **« Préparer la semaine »**, chaque dimanche à 17 h (heure de Paris) : toucher la notification ouvre directement la fenêtre de préparation. Tester : Actions → *Préparer la semaine* → **Run workflow**.
 
 Si l'app est réinstallée, refaire les étapes 2–3. Sans activité sur le dépôt pendant 60 jours, GitHub suspend les tâches planifiées : il suffit de les réactiver dans l'onglet Actions.
 
