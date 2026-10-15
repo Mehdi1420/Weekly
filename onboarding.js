@@ -116,7 +116,8 @@ function renderOnboarding() {
       <div class="field"><label><textarea data-ob-life rows="7" placeholder="Ex : Je travaille en alternance du lundi au mercredi de 9h à 17h30 et j'ai cours le jeudi et le vendredi. Foot le mardi soir vers 20h, muscu 2 fois par semaine. Je lis un peu avant de dormir et je prépare la certification AWS.">${esc(ob.lifeText)}</textarea></label></div>
       ${data.settings.geminiKey ? '<p class="help">🤖 Ton texte sera analysé par l\'IA (Gemini).</p>' : `
       <p class="help" style="margin-bottom:8px">Sans clé, l'app comprend les formulations simples. Avec une clé Gemini gratuite (${geminiKeyLink('la créer ici')}), l'IA comprend tout ton texte et calcule aussi les calories de tes repas automatiquement.</p>
-      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`}`;
+      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="${esc(ob.geminiKey || '')}" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>
+      ${geminiKeyButton()}`}`;
   } else if (name === 'rhythm') {
     const kept = ob.routines;
     body = `
@@ -179,7 +180,8 @@ function renderOnboarding() {
       ${data.settings.geminiKey || ob.geminiKey ? '' : `
       <h2 class="ob-sub">Calcul des calories par l'IA</h2>
       <p class="ob-lead">Tu tapes ton repas comme tu parles, l'IA calcule les calories automatiquement. Gratuit avec une clé Google Gemini : ${geminiKeyLink()} → <b>Create API key</b>. Facultatif, modifiable dans les Réglages.</p>
-      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>`}`;
+      <div class="field"><label>Clé Gemini <input type="password" data-ob-key value="" placeholder="AIza… (facultatif)" autocomplete="off"></label></div>
+      ${geminiKeyButton()}`}`;
   } else {
     const n = buildIdeas(p).length;
     body = `

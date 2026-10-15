@@ -512,7 +512,8 @@ function renderSettings() {
     <p class="help">Tes rendez-vous apparaissent dans ta semaine et l'app planifie autour.</p>
     <div class="section-title">Recherche des calories</div>
     <button class="secondary" data-action="ai-mode">Recherche IA : ${AI_MODES[aiMode()]}</button>
-    <p class="help">Avec Gemini, chaque repas tapé est analysé automatiquement par l'IA (gratuit, clé à créer une fois). Sans IA, l'app utilise sa base intégrée de plats courants.</p>
+    ${data.settings.geminiKey ? '' : geminiKeyButton()}
+    <p class="help">Avec Gemini, chaque repas tapé est analysé automatiquement par l'IA (gratuit, clé à créer une fois : ${geminiKeyLink('la créer ici')}, puis colle-la dans « Recherche IA »). Sans IA, l'app utilise sa base intégrée de plats courants.</p>
     <div class="section-title">Sauvegarde</div>
     <button class="secondary" data-action="check-updates">Vérifier les mises à jour</button>
     <p class="help">L'app se met à jour toute seule quand tu l'ouvres. Ne la supprime pas de l'écran d'accueil : cela effacerait tes données.</p>
@@ -1154,6 +1155,7 @@ function openAiSheet() {
       <label>Utiliser <select name="mode">${Object.entries(AI_MODES).map(([k, v]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label>Clé Gemini <input type="password" name="key" value="${esc(data.settings.geminiKey || '')}" placeholder="AIza…" autocomplete="off"></label>
     </div>
+    ${geminiKeyButton()}
     <div class="card help-steps">
       <p><b>Gemini (conseillé)</b> : tu tapes ton repas, l'IA calcule tout de suite, rien à copier. Gratuit dans la limite de l'offre de Google, largement suffisante pour tes repas.</p>
       <p>Clé à créer une fois : ${geminiKeyLink('Ouvre la page des clés Gemini')} avec ton compte Google → <b>Create API key</b> → copie-la ici. Elle est gardée sur ton téléphone et sur ton compte si tu es connecté (visible de toi seul), mais pas dans les sauvegardes exportées.</p>

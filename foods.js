@@ -415,6 +415,9 @@ const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
 // Lien cliquable vers la page de création de clé (s'ouvre par-dessus l'app, on y revient sans rien perdre)
 const geminiKeyLink = (label = 'Obtenir ma clé Gemini') =>
   `<a class="ext-link" href="${GEMINI_KEY_URL}" target="_blank" rel="noopener">${label} ↗</a>`;
+// Version gros bouton, plus facile à toucher sur téléphone
+const geminiKeyButton = () =>
+  `<a class="secondary link-btn" href="${GEMINI_KEY_URL}" target="_blank" rel="noopener">🔑 Obtenir ma clé Gemini (gratuit) ↗</a>`;
 // Le modèle est choisi automatiquement parmi ceux disponibles pour la clé (le plus récent « flash »),
 // pour ne pas dépendre d'un nom de modèle qui change avec le temps.
 
