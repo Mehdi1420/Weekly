@@ -430,3 +430,5 @@ dialog[open] { animation: up .38s cubic-bezier(.2, .9, .3, 1.04); }
   .tabbar::before, .seg::before { transition: none; }
 }
 .wg-scroll { border: 0; }
+.ext-link { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ext-link:active { opacity: .6; }

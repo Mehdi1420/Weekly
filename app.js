@@ -1156,7 +1156,7 @@ function openAiSheet() {
     </div>
     <div class="card help-steps">
       <p><b>Gemini (conseillé)</b> : tu tapes ton repas, l'IA calcule tout de suite, rien à copier. Gratuit dans la limite de l'offre de Google, largement suffisante pour tes repas.</p>
-      <p>Clé à créer une fois : ouvre <b>aistudio.google.com/apikey</b> avec ton compte Google → <b>Create API key</b> → copie-la ici. Elle reste sur ton téléphone (et n'est pas incluse dans les sauvegardes exportées).</p>
+      <p>Clé à créer une fois : ${geminiKeyLink('Ouvre la page des clés Gemini')} avec ton compte Google → <b>Create API key</b> → copie-la ici. Elle est gardée sur ton téléphone et sur ton compte si tu es connecté (visible de toi seul), mais pas dans les sauvegardes exportées.</p>
       <p>Avec l'offre gratuite, Google peut utiliser les textes envoyés (ici, tes repas) pour améliorer ses services.</p>
       <p><b>ChatGPT</b> : passe par ton abonnement via l'app ChatGPT, mais il faut revenir et coller la réponse.</p>
     </div>`;
