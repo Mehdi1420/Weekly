@@ -25,7 +25,7 @@ const INTERESTS = [
 ].map(([id, label, a, b, at]) => (typeof a === 'number' ? [id, label, b, a, at] : [id, label, a, b, at]));
 // (le 5e champ, facultatif, est l'heure naturelle de l'activité)
 const GOALS = [
-  ['aws', '☁️ Certification AWS'], ['cert', '🎓 Autre certification'], ['code', '💻 Programmation'],
+  ['cert', '🎓 Certification ou diplôme'], ['code', '💻 Programmation'],
   ['language', '🗣️ Langue étrangère'], ['reading', '📖 Lecture'], ['instrument', '🎸 Instrument'], ['custom', '🎯 Autre projet'],
 ];
 const BOOK_THEMES = [
@@ -175,7 +175,7 @@ function renderOnboarding(dir = 0) {
       <h1>Tes objectifs perso</h1>
       <p class="ob-lead">L'app crée un projet pour chacun et planifie des sessions dans ta semaine.</p>
       <div class="chips">${GOALS.map(([id, l]) => chip('goals', id, l, p.goals.includes(id))).join('')}</div>${sugHint('goals')}
-      ${p.goals.includes('cert') ? `<div class="field"><label>Quelle certification ? <input type="text" data-ob="certName" value="${esc(p.certName)}" placeholder="Ex : Azure, Google Cloud…"></label></div>` : ''}
+      ${p.goals.includes('cert') ? `<div class="field"><label>Laquelle ? <input type="text" data-ob="certName" value="${esc(p.certName)}" placeholder="Ex : AWS, permis, TOEIC…"></label></div>` : ''}
       ${p.goals.includes('language') ? `<div class="field"><label>Quelle langue ? <input type="text" data-ob="language" value="${esc(p.language)}" placeholder="Ex : anglais"></label></div>` : ''}
       ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>
       <div class="field"><label>Autres genres <input type="text" data-ob="otherBookThemes" value="${esc(p.otherBookThemes || '')}" placeholder="Ex : polar, fantasy, manga, biographies…"></label></div>` : ''}
@@ -392,7 +392,8 @@ function projectsFromGoals(p) {
   const out = [];
   if (p === ob?.p) extrasResult(p).projects.filter(x => x.keep).forEach(x => out.push({ ...newProject('custom'), title: x.title, icon: x.icon || '🎯', category: x.category, weeklyMinutes: x.weeklyMinutes, session: x.session }));
   p.goals.forEach(g => {
-    if (g === 'aws') out.push(newProject('aws'));
+    // Certification AWS : programme détaillé ; autre certification : projet générique à son nom
+    if (g === 'aws' || (g === 'cert' && /\b(aws|amazon)\b/i.test(p.certName || ''))) out.push(newProject('aws'));
     else if (g === 'code') out.push(newProject('code'));
     else if (g === 'reading') out.push(newProject('reading'));
     else if (g === 'cert') out.push({ ...newProject('custom'), title: `Certification ${p.certName || ''}`.trim(), icon: '🎓', type: 'cert', category: 'etudes', weeklyMinutes: 150 });

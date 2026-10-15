@@ -124,7 +124,7 @@ function analyzeLifeLocal(text) {
   const noRun = all.replace(/\b(je cours|cours a pied|courir)\b/g, ' '); // « je cours » = course à pied, pas des cours
   if (/\b(cours|fac|universite|etudiante?|etudes|ecole|alternance|amphi)\b/.test(noRun)) out.situation = 'etudiant';
   else if (/\b(travail|travaille|bosse|boulot|job|cdi|cdd|salarie)\b/.test(all)) out.situation = 'actif';
-  if (/\baws\b/.test(all)) out.goals.push('aws');
+  if (/\baws\b/.test(all)) { out.goals.push('cert'); out.certName = 'AWS'; }
   else if (/\bcertif/.test(all)) { out.goals.push('cert'); out.certName = ((text.match(/certification\s+([A-Za-zÀ-ÿ0-9 ]{2,30})/i) || [])[1] || '').trim(); }
   if (/\b(programmation|programmer|coder|developpeur|developpement|python|javascript|java)\b/.test(all)) out.goals.push('code');
   const lang = all.match(/\b(anglais|espagnol|allemand|italien|chinois|japonais|arabe|coreen|portugais|russe|neerlandais)\b/);
@@ -152,7 +152,7 @@ async function analyzeLifeAI(text, key, deep = false) {
       'catégorie parmi : travail, etudes, sport, social, loisirs, maison, sante, autre. ' +
       `2) les sports pratiqués (identifiants parmi : ${sportIds} ; sinon le nom en français) et le nombre total de séances de sport par semaine. ` +
       `3) les centres d'intérêt (identifiants parmi : ${interestIds} ; sinon le nom). ` +
-      '4) les objectifs perso (identifiants parmi : aws, cert, code, language, reading, instrument), avec la langue et le nom de la certification si mentionnés. ' +
+      '4) les objectifs perso (identifiants parmi : cert, code, language, reading, instrument ; une certification AWS = cert avec le nom AWS), avec la langue et le nom de la certification si mentionnés. ' +
       '5) la situation (etudiant, actif ou autre ; alternance = etudiant) et l\'heure de coucher (HH:MM) si mentionnée. ' +
       'N\'invente rien qui ne soit pas dans le texte ; laisse vide ce qui est inconnu.' }] },
     contents: [{ role: 'user', parts: [{ text }] }],
@@ -208,9 +208,9 @@ function cleanLifeResult(r) {
     sportPerWeek: Number.isInteger(r.sportsPerWeek) && r.sportsPerWeek > 0 ? Math.min(14, r.sportsPerWeek) : null,
     interests: interests.filter(s => interestIds.includes(s)),
     otherInterests: interests.filter(s => !interestIds.includes(s)),
-    goals: (r.goals || []).filter(g => goalIds.includes(g)),
+    goals: [...new Set((r.goals || []).map(g => (g === 'aws' ? 'cert' : g)))].filter(g => goalIds.includes(g)),
     language: String(r.language || '').trim(),
-    certName: String(r.certName || '').trim(),
+    certName: String(r.certName || '').trim() || ((r.goals || []).includes('aws') ? 'AWS' : ''),
   };
 }
 
