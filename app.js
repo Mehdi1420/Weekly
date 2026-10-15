@@ -1261,6 +1261,8 @@ function openFoodSheet(item) {
 // --- Pas : passerelle avec l'app Santé via un raccourci iOS ---
 
 function syncSteps() {
+  // Pas encore configuré : on guide plutôt que de lancer un raccourci qui n'existe pas
+  if (!data.settings.stepsGist && !data.settings.stepsShortcutOk) { openStepsSetup(); return; }
   state.stepsPending = true;
   location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}`;
   setTimeout(render, 800);
@@ -1348,6 +1350,76 @@ async function fetchStepsFromGist(force = false) {
     state.gistError = e.message;
     if (state.tab === 'health' && !sheet.open) render();
   }
+}
+
+// Guide pas à pas pour relier l'app Santé : gist secret, clé GitHub, raccourci « Pas Weekly » (3 actions)
+function openStepsSetup() {
+  const id = data.settings.stepsGist;
+  const api = id ? `https://api.github.com/gists/${id}` : '';
+  const copyBtn = (txt, label) => `<button type="button" class="chip copy-chip" data-copy="${esc(txt)}">📋 ${label}</button>`;
+  sheetForm.innerHTML = `
+    <div class="sheet-head"><button type="button" class="text-btn" data-close>Fermer</button><h2>Synchro des pas</h2><span></span></div>
+    <p class="help" style="margin:0 4px 12px">Une app web ne peut pas lire Santé directement : un petit raccourci iPhone envoie tes pas dans une note privée GitHub, que l'app relit toute seule. À faire une seule fois (5 min).</p>
+
+    <div class="section-title">1. Ta note privée (gist)</div>
+    <div class="card help-steps">
+      <p>Ouvre GitHub Gist, nomme le fichier <b>pas.txt</b>, écris <b>0</b> dedans, puis <b>Create secret gist</b>. Copie l'adresse de la page et colle-la ici.</p>
+      <a class="secondary link-btn" href="https://gist.github.com/" target="_blank" rel="noopener">Ouvrir GitHub Gist ↗</a>
+    </div>
+    <div class="field"><label>Lien du gist <input type="url" name="gist" value="${id ? `https://gist.github.com/${id}` : ''}" placeholder="https://gist.github.com/…" autocomplete="off"></label></div>
+
+    <div class="section-title">2. Ta clé d'accès</div>
+    <div class="card help-steps">
+      <p>Le bouton ouvre la bonne page déjà remplie (droit <b>gist</b> uniquement). Choisis <b>No expiration</b>, touche <b>Generate token</b> et copie la clé <b>ghp_…</b> : tu la colleras dans le raccourci (l'app ne la garde pas).</p>
+      <a class="secondary link-btn" href="https://github.com/settings/tokens/new?scopes=gist&description=Weekly%20pas" target="_blank" rel="noopener">Créer la clé ↗</a>
+    </div>
+
+    <div class="section-title">3. Le raccourci « ${SHORTCUT_NAME} »</div>
+    <div class="card help-steps">
+      <p>App <b>Raccourcis</b> → <b>+</b> → nomme-le exactement <b>${SHORTCUT_NAME}</b>, puis ajoute ces 3 actions :</p>
+      <p><b>a.</b> <b>Rechercher des échantillons de santé</b> : Nombre de pas, Date de début <b>est aujourd'hui</b>.</p>
+      <p><b>b.</b> <b>Calculer des statistiques</b> : <b>Somme</b> des échantillons.</p>
+      <p><b>c.</b> <b>Obtenir le contenu de l'URL</b> :</p>
+      <p style="margin-left:12px">URL : ${api ? `<code>${esc(api)}</code><br>${copyBtn(api, 'Copier l’URL')}` : '<i>colle d’abord le lien du gist (étape 1)</i>'}</p>
+      <p style="margin-left:12px">Méthode <b>PATCH</b> · En-têtes : <b>Authorization</b> = <code>Bearer ghp_…</code> (ta clé) ${copyBtn('Bearer ', 'Copier « Bearer »')} et <b>Accept</b> = <code>application/vnd.github+json</code> ${copyBtn('application/vnd.github+json', 'Copier')}</p>
+      <p style="margin-left:12px">Corps <b>JSON</b> : <b>files</b> (Dictionnaire) → <b>pas.txt</b> (Dictionnaire) → <b>content</b> (Texte) = <i>Statistiques</i>.</p>
+      <p>Lance-le une fois et autorise l'accès à Santé.</p>
+    </div>
+
+    <div class="section-title">4. Automatique</div>
+    <div class="card help-steps">
+      <p>Raccourcis → <b>Automatisation</b> → <b>+</b> → <b>Heure de la journée</b> (ex. 13 h, 19 h, 23 h), <b>Exécuter immédiatement</b>, raccourci <b>${SHORTCUT_NAME}</b>.</p>
+    </div>
+    <div id="steps-test"></div>
+    <button type="submit" class="primary">Enregistrer et tester</button>`;
+  sheetForm.querySelector('[data-close]').onclick = () => sheet.close();
+  sheetForm.querySelectorAll('[data-copy]').forEach(b => {
+    b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('Copié'), () => toast('Copie impossible'));
+  });
+  sheetForm.gist.addEventListener('change', () => {
+    const g = gistIdFrom(sheetForm.gist.value);
+    if (g && g !== data.settings.stepsGist) { data.settings.stepsGist = g; save(); openStepsSetup(); }
+  });
+  sheetForm.onsubmit = async e => {
+    e.preventDefault();
+    const v = sheetForm.gist.value.trim();
+    const g = gistIdFrom(v);
+    if (v && !g) { toast('Lien de gist non reconnu'); return; }
+    data.settings.stepsGist = g || undefined;
+    delete data.settings.stepsSyncedAt;
+    state.gistError = null;
+    save();
+    if (!g) { sheet.close(); render(); toast('Synchro automatique désactivée'); return; }
+    const box = sheetForm.querySelector('#steps-test');
+    box.innerHTML = '<p class="help">Vérification du gist…</p>';
+    await fetchStepsFromGist(true);
+    const ok = !state.gistError;
+    box.innerHTML = ok
+      ? `<p class="help">✅ Gist trouvé${data.settings.stepsSyncedAt ? ` · dernière mise à jour ${fmtAgo(data.settings.stepsSyncedAt)}` : ''}. Lance le raccourci pour envoyer tes pas, l'app les relira toute seule.</p>`
+      : `<p class="help" style="color:var(--danger)">⚠️ ${esc(state.gistError)}</p>`;
+    if (ok) { data.settings.stepsShortcutOk = true; save(); render(); }
+  };
+  sheet.showModal();
 }
 
 function editStepsGist() {
@@ -1758,7 +1830,7 @@ view.addEventListener('click', e => {
       if (idea) { rejectIdea(idea.title); state.todayDismissed = true; save(); render(); }
       break;
     }
-    case 'steps-gist': editStepsGist(); break;
+    case 'steps-gist': openStepsSetup(); break;
     case 'add-weight': openWeightSheet(); break;
     case 'weight-tip': state.weightTip = b.dataset.date; render(); break;
     case 'profile': openProfileSheet(); break;

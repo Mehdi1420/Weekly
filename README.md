@@ -81,7 +81,9 @@ Une automatisation iPhone envoie tes pas plusieurs fois par jour dans une note p
 - Note : `Weekly pas` ; expiration : **No expiration** (ou 1 an, à renouveler) ; cocher **uniquement `gist`**.
 - **Generate token**, puis copier la clé (`ghp_…`). Elle ne s'affiche qu'une fois. Elle permet seulement de modifier tes gists, rien d'autre.
 
-**3. Créer le raccourci `Pas Weekly`** dans l'app **Raccourcis** :
+**Le plus simple : dans l'app, Forme → Synchroniser avec Santé** (ou Réglages → Activer la synchro automatique) ouvre un guide pas à pas avec les liens et des boutons pour copier les valeurs. Version courte du raccourci (pas du jour seulement) : *Rechercher des échantillons de santé* (Nombre de pas, aujourd'hui) → *Calculer des statistiques* (Somme) → *Obtenir le contenu de l'URL* (PATCH, comme ci-dessous, avec `content` = *Statistiques*).
+
+**3. Créer le raccourci `Pas Weekly`** (version complète, 7 derniers jours) dans l'app **Raccourcis** :
 1. **Rechercher des échantillons de santé** : Type = *Nombre de pas*, Date de début = *dans les 7 derniers jours*, Grouper par = *Jour*.
 2. **Répéter avec chacun** (sur le résultat), et à l'intérieur :
    - **Formater la date** : *Date de début* de l'élément répété, format personnalisé `yyyy-MM-dd`.
