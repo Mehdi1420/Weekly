@@ -36,7 +36,7 @@ async function updateWithAI(text, key) {
       'add_idea (title, category, duration en minutes) ; remove_idea (ideaId) ; ' +
       'set_time (key parmi eveningStart = heure où il est libre en semaine, weekendStart = début de journée le week-end, bedtime = coucher ; value HH:MM) ; ' +
       'set_sport_target (count = séances de sport par semaine) ; ' +
-      'add_goal (goal parmi aws, cert, code, language, reading, instrument ; name = langue ou certification) ; pause_project (projectId). ' +
+      'add_goal (goal parmi cert, code, language, reading, instrument ; name = langue ou nom de la certification, ex. AWS) ; pause_project (projectId). ' +
       'Catégories : travail, etudes, sport, social, loisirs, maison, sante, autre. ' +
       'Utilise les identifiants existants quand le texte parle d\'une activité déjà connue (ne la recrée pas). ' +
       'Si une heure est vague, estime une heure plausible ; si la durée manque, estime-la. N\'invente rien d\'autre. ' +
@@ -149,6 +149,7 @@ function cleanUpdates(list) {
       if (!Number.isInteger(x.count) || x.count < 0 || x.count > 14 || x.count === prefs().sportPerWeek) return;
       label = `🏃 Objectif sport : <b>${x.count} séance${x.count > 1 ? 's' : ''}</b> par semaine`;
     } else if (x.action === 'add_goal') {
+      if (x.goal === 'aws') { x.goal = 'cert'; x.name = x.name || 'AWS'; }
       if (!GOALS.some(g => g[0] === x.goal)) return;
       const proj = projectsFromGoals({ goals: [x.goal], certName: x.name || '', language: x.name || '' })[0];
       if (data.projects.some(p => p.active && norm(p.title) === norm(proj.title))) return;
