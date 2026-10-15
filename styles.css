@@ -358,3 +358,75 @@ body.ob-open .tabbar { display: none; }
 @media (max-width: 899px) { .tabbar button { min-width: 0; flex: 1; padding: 4px 2px; font-size: 10px; } }
 @media (min-width: 700px) { .media-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1200px) { main:not(.wide) .media-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- Refonte visuelle : profondeur, dégradé de l'icône, barre flottante ---------- */
+:root {
+  --grad: linear-gradient(135deg, #5f55f0 0%, #9b5de5 55%, #e0679f 100%);
+  --edge: rgba(255, 255, 255, .55);
+  --shadow: 0 1px 2px rgba(30, 30, 70, .06), 0 8px 24px rgba(30, 30, 70, .08);
+  --page: radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, #9b5de5 16%, var(--bg)) 0%, var(--bg) 60%) fixed, var(--bg);
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --edge: rgba(255, 255, 255, .06);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+    --page: radial-gradient(120% 60% at 50% -10%, #221a3d 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+}
+body, #auth, #onboarding { background: var(--page); }
+
+.header h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.8px; }
+.section-title { font-size: 12px; font-weight: 700; letter-spacing: .6px; margin-top: 22px; }
+
+.card, .day, .list, .field, .media-card, .wg-scroll, .secondary, .danger, .suggestion, .icon-btn {
+  box-shadow: var(--shadow); border: 1px solid var(--edge);
+}
+.suggestion { border: 2px solid transparent; background: linear-gradient(var(--card), var(--card)) padding-box, var(--grad) border-box; }
+.suggestion .label, .today-card .label { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.chip { border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(30, 30, 70, .06); }
+
+.primary { background: var(--grad); border-radius: 14px; box-shadow: 0 8px 20px color-mix(in srgb, #7b5ce8 35%, transparent); }
+.chip.selectable.active, .wg-day.today b { background: var(--grad); }
+.meter-fill:not(.over) { background: var(--grad); }
+.mini.ok { background: var(--grad); color: #fff; }
+
+/* Retour tactile : tout ce qu'on touche s'enfonce légèrement */
+.primary, .secondary, .danger, .plan-btn, .icon-btn, .chip, .mini, .media-card, .project-card, .idea-main, .wg-ev {
+  transition: transform .18s cubic-bezier(.3, .7, .4, 1.3), filter .15s;
+}
+.primary:active, .secondary:active, .danger:active, .plan-btn:active, .chip:active, .media-card:active, .project-card:active { transform: scale(.97); }
+.icon-btn:active, .mini:active { transform: scale(.88); }
+
+/* Feuilles : poignée et ouverture plus douce */
+dialog { border-radius: 22px 22px 0 0; }
+dialog::before { content: ''; display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .35; margin: 8px auto 0; }
+dialog[open] { animation: up .38s cubic-bezier(.2, .9, .3, 1.04); }
+@keyframes up { from { transform: translateY(70px); opacity: .3; } }
+.toast { background: rgba(30, 28, 45, .88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 11px 18px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+
+/* Téléphone : barre d'onglets flottante avec une bulle qui suit l'onglet actif */
+@media (max-width: 899px) {
+  main { padding-bottom: calc(env(safe-area-inset-bottom) + 108px); }
+  .tabbar {
+    left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 6px); padding: 6px;
+    border-radius: 26px; border: 1px solid var(--edge);
+    box-shadow: 0 10px 30px rgba(30, 30, 70, .18), 0 2px 6px rgba(30, 30, 70, .08);
+  }
+  .tabbar::before {
+    content: ''; position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / var(--n, 6));
+    border-radius: 20px; background: color-mix(in srgb, var(--accent) 15%, transparent);
+    transform: translateX(calc(100% * var(--i, 0))); transition: transform .5s cubic-bezier(.34, 1.25, .5, 1);
+  }
+  .tabbar button { position: relative; padding: 6px 2px; }
+  .toast { bottom: calc(env(safe-area-inset-bottom) + 96px); }
+}
+@media (min-width: 900px) {
+  dialog { border-radius: 22px; }
+  dialog::before { display: none; }
+  .tabbar button.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabbar::before, .seg::before { transition: none; }
+}
+.wg-scroll { border: 0; }
