@@ -540,3 +540,6 @@ main .header h1 { font-size: clamp(25px, 7.4vw, 34px); }
 .end-wrap { display: flex; align-items: center; gap: 8px; }
 .next-day { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
 .next-day[hidden] { display: none; }
+
+.copy-chip { margin: 4px 0; font-size: 13px; padding: 4px 10px; }
+.help-steps code { font-size: 12px; word-break: break-all; background: color-mix(in srgb, var(--sec) 10%, transparent); padding: 1px 4px; border-radius: 4px; }
