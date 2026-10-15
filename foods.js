@@ -411,6 +411,10 @@ function parseChatGPT(answer) {
 
 // ---------- Recherche IA automatique : Google Gemini (offre gratuite) ----------
 // Appel direct depuis le téléphone avec la clé de l'utilisateur (aistudio.google.com/apikey).
+const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
+// Lien cliquable vers la page de création de clé (s'ouvre par-dessus l'app, on y revient sans rien perdre)
+const geminiKeyLink = (label = 'Obtenir ma clé Gemini') =>
+  `<a class="ext-link" href="${GEMINI_KEY_URL}" target="_blank" rel="noopener">${label} ↗</a>`;
 // Le modèle est choisi automatiquement parmi ceux disponibles pour la clé (le plus récent « flash »),
 // pour ne pas dépendre d'un nom de modèle qui change avec le temps.
 
