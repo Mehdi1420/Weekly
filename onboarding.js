@@ -96,13 +96,24 @@ function obVisibleSteps() {
 // Peu de choix affichés au départ (les plus courants + ceux déjà cochés) ; le reste sur demande
 const FEW = 6;
 function shortList(group, list, selected) {
-  const shown = ob.more[group] ? list : list.filter(([id], i) => i < FEW || selected.includes(id));
+  // Les choix libres (suggérés ou déjà cochés) s'ajoutent au catalogue, les suggestions passent devant
+  const extra = [...new Set([...selected, ...suggestedOf(group)])].filter(id => id.startsWith('free:')).map(id => [id, freeLabel(id)]);
+  const sug = suggestedOf(group);
+  list = [...extra, ...list].sort((a, b) => sug.includes(b[0]) - sug.includes(a[0]));
+  const shown = ob.more[group] ? list : list.filter(([id], i) => i < FEW || selected.includes(id) || sug.includes(id));
   const more = !ob.more[group] && shown.length < list.length
     ? `<button type="button" class="chip more-chip" data-ob-more="${group}">＋ ${list.length - shown.length} autres idées</button>` : '';
   return shown.map(([id, l]) => chip(group, id, l, selected.includes(id))).join('') + more;
 }
 
-const chip = (group, id, label, on) => `<button type="button" class="chip selectable ${on ? 'active' : ''}" data-ob-chip="${group}" data-id="${id}">${label}</button>`;
+const chip = (group, id, label, on) => {
+  const sug = !on && ob && ob.suggested && (ob.suggested[group] || []).includes(id);
+  return `<button type="button" class="chip selectable ${on ? 'active' : ''} ${sug ? 'suggested' : ''}" data-ob-chip="${group}" data-id="${esc(id)}">${sug ? '✨ ' : ''}${esc(label)}</button>`;
+};
+// Choix suggérés par l'analyse du texte (affichés en premier, à toucher pour les ajouter)
+const suggestedOf = group => (ob && ob.suggested && ob.suggested[group]) || [];
+const freeLabel = id => id.slice(5);
+const sugHint = group => (suggestedOf(group).length ? '<p class="help" style="margin:-6px 4px 12px">✨ Suggéré d\'après ce que tu as écrit : touche pour l\'ajouter.</p>' : '');
 
 function renderOnboarding(dir = 0) {
   const steps = obVisibleSteps();
@@ -147,7 +158,7 @@ function renderOnboarding(dir = 0) {
     body = `
       <h1>Tes sports</h1>
       <p class="ob-lead">Ceux que tu pratiques ou que tu aimerais pratiquer. Coche ou écris-les avec tes mots.</p>
-      <div class="chips">${shortList('sports', SPORTS, p.sports)}</div>
+      <div class="chips">${shortList('sports', SPORTS, p.sports)}</div>${sugHint('sports')}
       <div class="field"><label class="free"><span>Avec tes mots</span><textarea data-ob="otherSport" rows="2" placeholder="Ex : surf l'été, foot en salle avec les collègues, je veux reprendre la course…">${esc(p.otherSport)}</textarea></label></div>
       <div class="field">
         <label>Séances par semaine visées
@@ -157,13 +168,13 @@ function renderOnboarding(dir = 0) {
     body = `
       <h1>Tes centres d'intérêt</h1>
       <p class="ob-lead">L'app s'en sert pour te proposer des idées qui te ressemblent. Coche ou écris-les avec tes mots.</p>
-      <div class="chips">${shortList('interests', INTERESTS, p.interests)}</div>
+      <div class="chips">${shortList('interests', INTERESTS, p.interests)}</div>${sugHint('interests')}
       <div class="field"><label class="free"><span>Avec tes mots</span><textarea data-ob="otherInterest" rows="3" placeholder="Ex : théâtre, pêche le week-end, soirées jeux avec les potes, j'aimerais me mettre à la peinture…">${esc(p.otherInterest)}</textarea></label></div>`;
   } else if (name === 'goals') {
     body = `
       <h1>Tes objectifs perso</h1>
       <p class="ob-lead">L'app crée un projet pour chacun et planifie des sessions dans ta semaine.</p>
-      <div class="chips">${GOALS.map(([id, l]) => chip('goals', id, l, p.goals.includes(id))).join('')}</div>
+      <div class="chips">${GOALS.map(([id, l]) => chip('goals', id, l, p.goals.includes(id))).join('')}</div>${sugHint('goals')}
       ${p.goals.includes('cert') ? `<div class="field"><label>Quelle certification ? <input type="text" data-ob="certName" value="${esc(p.certName)}" placeholder="Ex : Azure, Google Cloud…"></label></div>` : ''}
       ${p.goals.includes('language') ? `<div class="field"><label>Quelle langue ? <input type="text" data-ob="language" value="${esc(p.language)}" placeholder="Ex : anglais"></label></div>` : ''}
       ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>
@@ -368,7 +379,9 @@ function closeOnboarding() {
 function buildIdeas(p) {
   const out = [];
   SPORTS.filter(([id]) => p.sports.includes(id)).forEach(([, title, duration]) => out.push({ title, category: 'sport', duration }));
+  p.sports.filter(id => id.startsWith('free:')).forEach(id => out.push({ title: freeLabel(id), category: 'sport', duration: 60 }));
   INTERESTS.filter(([id]) => p.interests.includes(id)).forEach(([, title, category, duration, at]) => out.push({ title, category, duration, ...(at ? { at } : {}) }));
+  p.interests.filter(id => id.startsWith('free:')).forEach(id => out.push({ title: freeLabel(id), category: 'loisirs', duration: 90 }));
   ALWAYS_IDEAS.forEach(([title, category, duration]) => out.push({ title, category, duration }));
   // Ce que l'utilisateur a écrit avec ses mots, interprété par l'analyse (et validé au récapitulatif)
   extrasResult(p).ideas.filter(i => i.keep).forEach(({ title, category, duration, at }) => out.push({ title, category, duration, ...(at ? { at } : {}) }));
