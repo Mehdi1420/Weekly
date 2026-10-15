@@ -1,0 +1,25 @@
+name: Préparer la semaine
+
+on:
+  schedule:
+    # Dimanche 17 h à Paris = 15 h UTC en été, 16 h UTC en hiver : on tente les deux,
+    # le script n'envoie qu'à la bonne heure.
+    - cron: '0 15,16 * * 0'
+  workflow_dispatch: {}
+
+jobs:
+  notifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save web-push@3.6.7
+      - run: node scripts/send-push.mjs
+        env:
+          PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
+          PUSH_BODY: "C'est dimanche : 2 minutes pour préparer ta semaine 🗓️"
+          PUSH_URL: './?preparer=1'
+          # Lancement manuel (« Run workflow ») : envoi immédiat pour tester
+          PUSH_ONLY_AT_PARIS_HOUR: ${{ github.event_name == 'schedule' && '17' || '' }}
