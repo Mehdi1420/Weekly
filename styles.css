@@ -312,3 +312,26 @@ body.ob-open .tabbar { display: none; }
 }
 /* La barre d'onglets reste toujours au-dessus du contenu (dont l'en-tête collant de la grille) */
 .tabbar { z-index: 20; }
+
+/* ---------- Médias ---------- */
+.media-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
+.media-card { display: flex; gap: 12px; align-items: flex-start; text-align: left; border: 0; background: var(--card); border-radius: var(--radius); padding: 10px; width: 100%; }
+.media-card img, .media-card .media-ph { width: 62px; height: 90px; border-radius: 8px; object-fit: cover; flex: none; background: var(--line); }
+.media-ph { display: grid; place-items: center; font-size: 26px; background: var(--line); border-radius: 8px; flex: none; }
+.media-ph.small, .idea img.thumb { width: 40px; height: 58px; font-size: 18px; }
+.idea img.thumb { border-radius: 6px; object-fit: cover; flex: none; background: var(--line); }
+.media-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
+.media-head img, .media-head .media-ph { width: 84px; height: 122px; border-radius: 10px; object-fit: cover; flex: none; }
+.media-head h2 { margin: 2px 0 4px; font-size: 20px; }
+.season { margin-bottom: 8px; }
+.season summary { display: flex; align-items: center; gap: 8px; padding: 10px 4px; cursor: pointer; list-style: none; }
+.season summary::-webkit-details-marker { display: none; }
+.season summary b { flex: 1; }
+.season summary::before { content: '›'; color: var(--muted); transition: transform .15s; display: inline-block; }
+.season[open] summary::before { transform: rotate(90deg); }
+.field label.step.future { opacity: .45; }
+#media-results { margin-top: 12px; max-height: 55dvh; overflow-y: auto; }
+/* 6 onglets sur téléphone */
+@media (max-width: 899px) { .tabbar button { min-width: 0; flex: 1; padding: 4px 2px; font-size: 10px; } }
+@media (min-width: 700px) { .media-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1200px) { main:not(.wide) .media-grid { grid-template-columns: repeat(2, 1fr); } }

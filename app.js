@@ -32,7 +32,7 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} }, tasks: [], projects: [], books: [] });
+const EMPTY_HEALTH = () => ({ food: [], steps: {}, weights: [], profile: {}, customFoods: {}, settings: {}, routines: [], learn: { dismissed: {}, rejected: {} }, tasks: [], projects: [], books: [], media: [] });
 const withDefaults = d => ({ ...EMPTY_HEALTH(), meta: {}, ...d });
 
 function load() {
@@ -170,6 +170,7 @@ function render() {
   else if (state.tab === 'ideas') renderIdeas();
   else if (state.tab === 'health') renderHealth();
   else if (state.tab === 'goals') renderGoals();
+  else if (state.tab === 'media') renderMedia();
   else renderSettings();
 }
 
@@ -515,7 +516,7 @@ function renderSettings() {
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
     ${cloudEnabled() && getSession() ? '<button class="danger" data-action="delete-cloud" style="margin-top:10px">Supprimer mes données du serveur</button>' : ''}
-    <p class="help">Ma Semaine · version 1.1</p>`;
+    <p class="help">Ma Semaine · version 1.2</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -1494,6 +1495,7 @@ document.querySelector('.tabbar').addEventListener('click', e => {
   render();
   window.scrollTo(0, 0);
   if (['health', 'goals', 'week'].includes(state.tab)) fetchStepsFromGist();
+  if (state.tab === 'media') refreshRunningSeries().then(changed => { if (changed && state.tab === 'media' && !sheet.open) render(); });
 });
 
 view.addEventListener('click', e => {
@@ -1587,6 +1589,17 @@ view.addEventListener('click', e => {
     case 'books-chatgpt': booksChatGPT(); break;
     case 'moodle-help': openMoodleHelp(); break;
     case 'agenda-help': openAgendaHelp(); break;
+    case 'media-add': openMediaSearch(); break;
+    case 'media-bulk': openBulkImport(); break;
+    case 'media-filter': state.mediaFilter = b.dataset.f; render(); break;
+    case 'media-status': state.mediaStatus = b.dataset.s; render(); break;
+    case 'open-media': openMediaSheet(media().find(m => m.id === id)); break;
+    case 'ep-next': {
+      const m = media().find(x => x.id === id);
+      const p = m && seriesProgress(m);
+      if (p && p.nextEp) { toggleEpisode(m, epKey(p.nextEp), true); save(); render(); toast(`${m.title} S${pad(p.nextEp[0])}E${pad(p.nextEp[1])} vu ✓`); }
+      break;
+    }
     case 'onboarding': startOnboarding(); break;
     case 'login': showAuth('login'); break;
     case 'logout':
