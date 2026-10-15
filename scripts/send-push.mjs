@@ -10,7 +10,7 @@ const { subscription, vapidPublicKey, vapidPrivateKey } = JSON.parse(process.env
 
 webpush.setVapidDetails('mailto:ma-semaine@example.com', vapidPublicKey, vapidPrivateKey);
 const payload = JSON.stringify({
-  title: 'Ma Semaine',
+  title: 'Weekly',
   body: process.env.PUSH_BODY || "C'est dimanche : pense à te peser ⚖️",
   url: './?pesee=1',
 });

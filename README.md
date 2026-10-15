@@ -1,4 +1,4 @@
-# Ma Semaine
+# Weekly
 
 Application iPhone personnelle pour organiser mon emploi du temps, choisir mes activités de la semaine et suivre ma forme.
 
@@ -78,10 +78,10 @@ Une automatisation iPhone envoie tes pas plusieurs fois par jour dans une note p
 
 **2. Créer une clé d'accès limitée aux gists**
 - github.com → photo de profil → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)** → **Generate new token (classic)**.
-- Note : `Ma Semaine pas` ; expiration : **No expiration** (ou 1 an, à renouveler) ; cocher **uniquement `gist`**.
+- Note : `Weekly pas` ; expiration : **No expiration** (ou 1 an, à renouveler) ; cocher **uniquement `gist`**.
 - **Generate token**, puis copier la clé (`ghp_…`). Elle ne s'affiche qu'une fois. Elle permet seulement de modifier tes gists, rien d'autre.
 
-**3. Créer le raccourci `Pas Ma Semaine`** dans l'app **Raccourcis** :
+**3. Créer le raccourci `Pas Weekly`** dans l'app **Raccourcis** :
 1. **Rechercher des échantillons de santé** : Type = *Nombre de pas*, Date de début = *dans les 7 derniers jours*, Grouper par = *Jour*.
 2. **Répéter avec chacun** (sur le résultat), et à l'intérieur :
    - **Formater la date** : *Date de début* de l'élément répété, format personnalisé `yyyy-MM-dd`.
@@ -95,7 +95,7 @@ Une automatisation iPhone envoie tes pas plusieurs fois par jour dans une note p
 
 Lancer le raccourci une fois à la main et autoriser l'accès à Santé. Le gist doit maintenant contenir tes pas.
 
-**4. Automatiser** : Raccourcis → onglet **Automatisation** → **+** → **Heure de la journée** → par ex. 9 h, *Quotidiennement* → **Exécuter immédiatement** → raccourci *Pas Ma Semaine*. Répéter pour quelques heures dans la journée (par ex. 13 h, 19 h, 23 h) pour que les pas restent à jour.
+**4. Automatiser** : Raccourcis → onglet **Automatisation** → **+** → **Heure de la journée** → par ex. 9 h, *Quotidiennement* → **Exécuter immédiatement** → raccourci *Pas Weekly*. Répéter pour quelques heures dans la journée (par ex. 13 h, 19 h, 23 h) pour que les pas restent à jour.
 
 **5. Dans l'app** : Réglages → **Activer la synchro automatique** → coller l'adresse du gist. L'onglet Forme affiche « 🔄 Synchro auto · données envoyées il y a … ».
 

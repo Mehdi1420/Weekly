@@ -228,7 +228,7 @@ function showAuth(mode = 'login', message = '') {
     <form class="ob-inner auth-inner" novalidate>
       <div class="ob-body">
         <img class="auth-logo" src="icons/icon-192.png" alt="">
-        <h1>${forgot ? 'Mot de passe oublié' : signup ? 'Créer ton compte' : 'Ma Semaine'}</h1>
+        <h1>${forgot ? 'Mot de passe oublié' : signup ? 'Créer ton compte' : 'Weekly'}</h1>
         <p class="ob-lead">${forgot ? 'Tu vas recevoir un e-mail pour choisir un nouveau mot de passe.'
           : signup ? 'Tes données seront liées à ton compte et retrouvées sur tous tes appareils.'
           : 'Connecte-toi pour retrouver tes données sur tous tes appareils.'}</p>

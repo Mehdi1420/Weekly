@@ -516,7 +516,7 @@ function renderSettings() {
     <div class="section-title">Zone sensible</div>
     <button class="danger" data-action="reset">Tout effacer</button>
     ${cloudEnabled() && getSession() ? '<button class="danger" data-action="delete-cloud" style="margin-top:10px">Supprimer mes données du serveur</button>' : ''}
-    <p class="help">Ma Semaine · version 1.2</p>`;
+    <p class="help">Weekly · version 1.3</p>`;
 }
 
 // ---------- Feuilles (formulaires) ----------
@@ -670,9 +670,9 @@ function exportData() {
   const withKey = data.settings.geminiKey && confirm('Inclure ta clé Gemini dans la sauvegarde ?\n(OK seulement si tu gardes ce fichier pour toi)');
   const copy = { ...data, settings: { ...data.settings, geminiKey: withKey ? data.settings.geminiKey : undefined } };
   const blob = new Blob([JSON.stringify(copy, null, 2)], { type: 'application/json' });
-  const file = new File([blob], `ma-semaine-${toISO(new Date())}.json`, { type: 'application/json' });
+  const file = new File([blob], `weekly-${toISO(new Date())}.json`, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: 'Sauvegarde Ma Semaine' }).catch(() => {});
+    navigator.share({ files: [file], title: 'Sauvegarde Weekly' }).catch(() => {});
   } else {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -710,7 +710,7 @@ const MEALS = [
   { id: 'collation', name: 'Collation' },
   { id: 'diner', name: 'Dîner' },
 ];
-const SHORTCUT_NAME = 'Pas Ma Semaine';
+const SHORTCUT_NAME = 'Pas Weekly';
 const fmtNum = n => Math.round(n).toLocaleString('fr-FR');
 
 function currentMeal() {
