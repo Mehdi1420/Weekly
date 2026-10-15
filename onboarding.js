@@ -131,12 +131,13 @@ function renderOnboarding(dir = 0) {
           <input type="checkbox" data-ob-routine="${i}" ${r.keep ? 'checked' : ''}></label>`).join('')}
       </div>` : ''}
       <h${kept.length ? '2 class="ob-sub"' : '1'}>Ton rythme</h${kept.length ? '2' : '1'}>
-      <p class="ob-lead">Pour proposer des activités quand tu es vraiment libre.</p>
+      <p class="ob-lead">L'app ne te proposera des activités (sport, lecture, projets…) que pendant ton temps libre. Indique quand il commence et quand il se termine.</p>
+      <p class="ob-q">Tu es plutôt…</p>
       <div class="chips">${[['etudiant', '🎓 Étudiant·e'], ['actif', '💼 En activité'], ['autre', '🌱 Autre']].map(([id, l]) => chip('situation', id, l, p.situation === id)).join('')}</div>
-      <div class="field">
-        <label>En semaine, je suis libre à partir de <input type="time" data-ob="eveningStart" value="${p.eveningStart}"></label>
-        <label>Le week-end, je commence vers <input type="time" data-ob="weekendStart" value="${p.weekendStart}"></label>
-        <label>Je me couche vers <input type="time" data-ob="bedtime" value="${p.bedtime}"></label>
+      <div class="field rhythm">
+        <label><span>Libre en semaine dès<small>Fin de tes cours ou de ton travail</small></span><input type="time" data-ob="eveningStart" value="${p.eveningStart}"></label>
+        <label><span>Libre le week-end dès<small>L'heure où ta journée commence vraiment</small></span><input type="time" data-ob="weekendStart" value="${p.weekendStart}"></label>
+        <label><span>Je me couche vers<small>Rien ne sera proposé après</small></span><input type="time" data-ob="bedtime" value="${p.bedtime}"></label>
       </div>`;
   } else if (name === 'sports') {
     body = `
@@ -192,7 +193,7 @@ function renderOnboarding(dir = 0) {
         ${ob.routines.filter(r => r.keep).length ? `<li>${ob.routines.filter(r => r.keep).length} activités régulières ajoutées à ton planning</li>` : ''}
         <li>${n} idées d'activités adaptées à tes goûts</li>
         ${p.modules.goals && p.goals.length ? `<li>${p.goals.length} projet${p.goals.length > 1 ? 's' : ''} créé${p.goals.length > 1 ? 's' : ''} dans Objectifs</li>` : ''}
-        <li>Propositions entre ${p.eveningStart} et ${p.bedtime} en semaine, dès ${p.weekendStart} le week-end</li>
+        <li>Activités proposées de ${p.eveningStart} à ${p.bedtime} en semaine, et de ${p.weekendStart} à ${p.bedtime} le week-end</li>
         ${p.sports.length || p.otherSport ? `<li>Objectif : ${p.sportPerWeek} séance${p.sportPerWeek > 1 ? 's' : ''} de sport par semaine</li>` : ''}
       </ul>
       <p class="ob-lead">Note tes activités au fil des jours : l'app repère tes routines, ajuste ses propositions et retient ce que tu refuses.</p>`;
