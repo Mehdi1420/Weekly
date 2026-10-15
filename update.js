@@ -63,7 +63,7 @@ async function updateWithAI(text, key) {
       },
     },
   };
-  const res = await geminiFetch(`models/${data.settings.geminiModel}:generateContent`, key, body);
+  const res = await geminiGenerate(data.settings.geminiModel, key, body);
   const part = res.candidates && res.candidates[0] && res.candidates[0].content && res.candidates[0].content.parts.find(p => p.text);
   if (!part) throw new Error('réponse vide');
   return JSON.parse(part.text).changes || [];
