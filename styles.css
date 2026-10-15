@@ -533,3 +533,10 @@ main .header h1 { font-size: clamp(25px, 7.4vw, 34px); }
 
 /* Choix suggérés par l'IA : pas cochés, juste mis en avant */
 .chip.suggested { border: 1.5px dashed color-mix(in srgb, var(--sec) 55%, transparent); background: color-mix(in srgb, var(--sec) 8%, var(--card)); }
+
+/* Grille : toute la journée, défilement vertical interne (on remonte vers la nuit) */
+.wg-scroll { max-height: min(72vh, 640px); overflow: auto; overscroll-behavior: contain; }
+@media (min-width: 900px) { .wg-scroll { max-height: 76vh; overflow: hidden auto; } }
+.end-wrap { display: flex; align-items: center; gap: 8px; }
+.next-day { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.next-day[hidden] { display: none; }

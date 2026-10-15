@@ -86,7 +86,7 @@ function newProject(kind) {
 }
 
 const readingProject = () => data.projects.find(p => p.type === 'reading' && p.active);
-const evMinutes = e => toMin(e.end) - toMin(e.start);
+const evMinutes = e => durMin(e);
 
 function weekBounds(iso) {
   const ws = toISO(startOfWeek(fromISO(iso)));

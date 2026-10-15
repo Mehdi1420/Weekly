@@ -122,6 +122,10 @@ const fmtDay = d => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numer
 const fmtShort = d => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const fromMin = m => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+// Fin d'une activité en minutes : une fin avant le début veut dire « le lendemain » (soirée jusqu'à 2 h…)
+const endMin = e => { const s = toMin(e.start), x = toMin(e.end); return x <= s ? x + 1440 : x; };
+const durMin = e => endMin(e) - toMin(e.start);
+const overnight = e => toMin(e.end) < toMin(e.start);
 function fmtDuration(min) {
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60), m = min % 60;
@@ -200,7 +204,7 @@ function renderWeek() {
 
   const weekEvents = data.events.filter(e => e.date >= toISO(start) && e.date <= toISO(end));
   const totals = {};
-  weekEvents.forEach(e => { totals[e.category] = (totals[e.category] || 0) + (toMin(e.end) - toMin(e.start)); });
+  weekEvents.forEach(e => { totals[e.category] = (totals[e.category] || 0) + durMin(e); });
 
   let html = `
     <div class="header">
@@ -249,7 +253,7 @@ function renderWeek() {
       <div class="suggestion">
         <div class="label">🧠 J'ai remarqué une habitude</div>
         <div class="idea-title" style="margin:4px 0 2px">${esc(detected.title)}</div>
-        <div class="idea-meta" style="margin-bottom:10px">${daysLabel(detected.days)} vers ${detected.start} · ${fmtDuration(toMin(detected.end) - toMin(detected.start))}</div>
+        <div class="idea-meta" style="margin-bottom:10px">${daysLabel(detected.days)} vers ${detected.start} · ${fmtDuration(durMin(detected))}</div>
         <div class="row">
           <button class="secondary" data-action="routine-no" data-key="${esc(detected.key)}">Non merci</button>
           <button class="primary" data-action="routine-yes" data-key="${esc(detected.key)}">En faire une routine</button>
@@ -308,18 +312,19 @@ function layoutDay(items) {
 function renderWeekGrid(start, proposals, todayISO) {
   const days = [...Array(7)].map((_, i) => toISO(addDays(start, i)));
   const all = days.flatMap(iso => [...eventsOn(iso), ...proposals.filter(p => p.date === iso)]);
-  // Plage horaire affichée : 7 h – minuit, élargie si une activité dépasse
-  const first = Math.min(7 * 60, ...all.map(e => toMin(e.start)));
-  const last = Math.max(24 * 60, ...all.map(e => Math.max(toMin(e.end), toMin(e.start) + 30)));
-  const h0 = Math.floor(first / 60);
-  const h1 = Math.min(24, Math.ceil(last / 60));
+  // Toute la journée (0 h – 24 h) ; la grille défile verticalement et s'ouvre vers le matin
+  const h0 = 0;
+  const h1 = 24;
   const top = m => ((m - h0 * 60) / 60) * 100; // en « heures × 100 », converti en px par la variable CSS
   const now = nowMinutes();
 
   const cols = days.map(iso => {
-    const span = x => ({ s: toMin(x.start), e: Math.max(toMin(x.end), toMin(x.start) + 20) });
+    // Une activité qui finit après minuit s'arrête à 24 h et continue au début du jour suivant
+    const span = x => ({ s: toMin(x.start), e: Math.min(1440, Math.max(endMin(x), toMin(x.start) + 20)) });
+    const prev = toISO(addDays(fromISO(iso), -1));
     const items = layoutDay([
       ...eventsOn(iso).map(ev => ({ item: ev, ...span(ev) })),
+      ...eventsOn(prev).filter(overnight).map(ev => ({ item: { ...ev, cont: true }, s: 0, e: Math.max(20, toMin(ev.end)) })),
       ...proposals.filter(p => p.date === iso).map(p => ({ item: { ...p, proposal: true }, ...span(p) })),
     ]);
     const blocks = items.map(({ item: ev, s, e, lane, lanes }) => {
@@ -334,7 +339,7 @@ function renderWeekGrid(start, proposals, todayISO) {
       }
       return `<button class="wg-ev ${ev.done ? 'done' : ''} ${short ? 'short' : ''}" style="${style}" data-action="edit" data-id="${ev.id}">
         <div class="wg-t"><span class="wg-ico">${cat(ev.category).icon}</span>${esc(ev.title)}${ev.routineId ? ' <span class="routine-icon">↻</span>' : ''}</div>
-        ${short ? '' : `<div class="wg-h">${ev.start}–${ev.end}</div>`}
+        ${short ? '' : `<div class="wg-h">${ev.cont ? `suite · jusqu'à ${ev.end}` : `${ev.start}–${ev.end}${overnight(ev) ? ' (+1 j)' : ''}`}</div>`}
       </button>`;
     }).join('');
     const nowLine = iso === todayISO && now >= h0 * 60 && now <= h1 * 60
@@ -366,6 +371,10 @@ function placeGridScroll(isCurrent) {
   const sc = view.querySelector('.wg-scroll');
   if (!sc) return;
   const key = toISO(state.weekStart);
+  // Hauteur : on reprend là où on était, sinon on ouvre sur l'heure actuelle (cette semaine) ou sur 7 h
+  const hourPx = sc.querySelector('.wg-hour').getBoundingClientRect().height;
+  const startMin = isCurrent ? Math.max(0, nowMinutes() - 90) : 7 * 60;
+  sc.scrollTop = state.gridScroll && state.gridScroll.key === key && state.gridScroll.top != null ? state.gridScroll.top : Math.round(startMin / 60 * hourPx);
   if (state.gridScroll && state.gridScroll.key === key) sc.scrollLeft = state.gridScroll.left;
   else if (isCurrent) {
     // Aujourd'hui en première colonne visible (après le rappel des heures)
@@ -373,7 +382,7 @@ function placeGridScroll(isCurrent) {
     const colW = sc.querySelector('.wg-col').getBoundingClientRect().width;
     if (idx > 0) requestAnimationFrame(() => { sc.scrollLeft = Math.round(idx * colW); });
   }
-  sc.addEventListener('scroll', () => { state.gridScroll = { key, left: sc.scrollLeft }; }, { passive: true });
+  sc.addEventListener('scroll', () => { state.gridScroll = { key, left: sc.scrollLeft, top: sc.scrollTop }; }, { passive: true });
 }
 
 // Carte « Aujourd'hui » : en cours / à suivre, activités passées à cocher, créneau libre à remplir
@@ -381,9 +390,9 @@ function renderToday() {
   const iso = toISO(new Date());
   const now = nowMinutes();
   const evs = eventsOn(iso);
-  const current = evs.find(e => toMin(e.start) <= now && toMin(e.end) > now);
+  const current = evs.find(e => toMin(e.start) <= now && endMin(e) > now);
   const next = evs.find(e => toMin(e.start) > now);
-  const toCheck = evs.filter(e => toMin(e.end) <= now && !e.done);
+  const toCheck = evs.filter(e => endMin(e) <= now && !e.done);
   // Pas de suggestion ici si la semaine proposée couvre déjà aujourd'hui
   const free = state.todayDismissed || state.proposals.some(p => p.date === iso) ? null : nextFreeSlotToday();
   if (!current && !next && !toCheck.length && !free) return '';
@@ -567,7 +576,7 @@ function openEventSheet(ev, isNew) {
     <div class="field">
       <label>Jour <input type="date" name="date" value="${ev.date}" required></label>
       <label>Début <input type="time" name="start" value="${ev.start}" required></label>
-      <label>Fin <input type="time" name="end" value="${ev.end}" required></label>
+      <label>Fin <span class="end-wrap"><small class="next-day" ${overnight(ev) ? '' : 'hidden'}>le lendemain</small><input type="time" name="end" value="${ev.end}" required></span></label>
     </div>
     <div class="field">
       <label>Catégorie <select name="category">${catOptions(ev.category)}</select></label>
@@ -581,12 +590,16 @@ function openEventSheet(ev, isNew) {
       ? '<div class="row-buttons"><button type="button" class="danger" data-skip>Sauter cette fois</button><button type="button" class="danger" data-stop>Arrêter la routine</button></div>'
       : '<button type="button" class="danger" data-delete>Supprimer</button>'}`;
 
+  const nd = sheetForm.querySelector('.next-day');
+  const markNextDay = () => { nd.hidden = !(sheetForm.end.value && sheetForm.start.value && toMin(sheetForm.end.value) < toMin(sheetForm.start.value)); };
+  sheetForm.start.addEventListener('input', markNextDay);
+  sheetForm.end.addEventListener('input', markNextDay);
   sheetForm.onsubmit = e => {
     e.preventDefault();
     const f = new FormData(sheetForm);
     const start = f.get('start');
     let end = f.get('end');
-    if (toMin(end) <= toMin(start)) end = fromMin(Math.min(toMin(start) + 60, 23 * 60 + 59));
+    if (toMin(end) === toMin(start)) end = fromMin((toMin(start) + 60) % 1440); // fin avant le début = le lendemain
     const wasDone = ev.done;
     if (ev.extId && f.get('category') !== ev.category) ev.categoryEdited = true; // garder ce choix aux prochains imports
     Object.assign(ev, {
@@ -1422,7 +1435,7 @@ function openPrepareSheet() {
   const events = data.events.filter(e => e.date >= ws && e.date <= we);
   const tasks = (data.tasks || []).filter(t => !t.done && t.due && t.due.slice(0, 10) <= we).sort((a, b) => a.due.localeCompare(b.due));
   const projects = (data.projects || []).filter(p => p.active);
-  const busy = events.reduce((m, e) => m + Math.max(0, toMin(e.end) - toMin(e.start)), 0);
+  const busy = events.reduce((m, e) => m + durMin(e), 0);
   sheetForm.innerHTML = `
     <div class="sheet-head"><button type="button" class="text-btn" data-close>Fermer</button><h2>Prépare ta semaine</h2><span></span></div>
     <p class="help" style="margin:0 4px 12px">Du ${fmtShort(start)} au ${fmtShort(addDays(start, 6))}</p>
