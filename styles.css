@@ -434,3 +434,4 @@ dialog[open] { animation: up .38s cubic-bezier(.2, .9, .3, 1.04); }
 .ext-link:active { opacity: .6; }
 .forgot-link { display: block; margin: -4px 2px 12px auto; padding: 2px 4px; font-size: 14px; font-weight: 500; }
 .forgot-link[hidden] { display: none; }
+a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; }
