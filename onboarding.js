@@ -132,8 +132,6 @@ function renderOnboarding(dir = 0) {
       </div>` : ''}
       <h${kept.length ? '2 class="ob-sub"' : '1'}>Ton rythme</h${kept.length ? '2' : '1'}>
       <p class="ob-lead">L'app ne te proposera des activités (sport, lecture, projets…) que pendant ton temps libre. Indique quand il commence et quand il se termine.</p>
-      <p class="ob-q">Tu es plutôt…</p>
-      <div class="chips">${[['etudiant', '🎓 Étudiant·e'], ['actif', '💼 En activité'], ['autre', '🌱 Autre']].map(([id, l]) => chip('situation', id, l, p.situation === id)).join('')}</div>
       <div class="field rhythm">
         <label><span>Libre en semaine dès<small>Fin de tes cours ou de ton travail</small></span><input type="time" data-ob="eveningStart" value="${p.eveningStart}"></label>
         <label><span>Libre le week-end dès<small>L'heure où ta journée commence vraiment</small></span><input type="time" data-ob="weekendStart" value="${p.weekendStart}"></label>
@@ -163,7 +161,7 @@ function renderOnboarding(dir = 0) {
       ${p.goals.includes('cert') ? `<div class="field"><label>Quelle certification ? <input type="text" data-ob="certName" value="${esc(p.certName)}" placeholder="Ex : Azure, Google Cloud…"></label></div>` : ''}
       ${p.goals.includes('language') ? `<div class="field"><label>Quelle langue ? <input type="text" data-ob="language" value="${esc(p.language)}" placeholder="Ex : anglais"></label></div>` : ''}
       ${p.goals.includes('reading') ? `<p class="ob-lead" style="margin-top:14px">Ce que tu aimes lire :</p><div class="chips">${BOOK_THEMES.map(([id, l]) => chip('bookThemes', id, l, p.bookThemes.includes(id))).join('')}</div>` : ''}
-      ${p.situation === 'etudiant' ? '<p class="help">🎓 Tu pourras connecter Moodle dans l\'onglet Objectifs pour importer cours et devoirs.</p>' : ''}`;
+      <p class="help">🎓 Tu as des cours ? Tu pourras connecter Moodle dans l'onglet Objectifs pour importer cours et devoirs.</p>`;
   } else if (name === 'health') {
     const pr = ob.profile;
     body = `
