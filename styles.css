@@ -474,3 +474,7 @@ a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; 
 .ob-progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 18px; }
 .ob-progress span { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--grad); animation: ob-slide 1.4s ease-in-out infinite; }
 @keyframes ob-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+/* Listes déroulantes et dates alignées à droite comme les autres champs */
+.field select { flex: 1; min-width: 0; text-align: right; text-align-last: right; }
+.field input[type="date"] { text-align: right; min-width: 0; }
