@@ -121,6 +121,20 @@ main {
   font-size: 10.5px; color: var(--muted); padding: 4px 4px; min-width: 60px;
 }
 .tabbar button.active { color: var(--accent); }
+.tabbar button { touch-action: manipulation; transition: color .2s; }
+.tabbar button svg { transition: transform .18s cubic-bezier(.3,.7,.4,1.4); }
+.tabbar button:active svg { transform: scale(.86); }
+.tabbar button.active svg { transform: scale(1.06); }
+
+/* Changement d'onglet : glissement léger dans le sens de l'onglet choisi */
+main.tab-in-r { animation: tab-in-r .26s cubic-bezier(.2,.8,.2,1); }
+main.tab-in-l { animation: tab-in-l .26s cubic-bezier(.2,.8,.2,1); }
+@keyframes tab-in-r { from { opacity: 0; transform: translateX(18px); } }
+@keyframes tab-in-l { from { opacity: 0; transform: translateX(-18px); } }
+@media (prefers-reduced-motion: reduce) {
+  main.tab-in-r, main.tab-in-l { animation: tab-fade .15s ease-out; }
+  @keyframes tab-fade { from { opacity: 0; } }
+}
 .tabbar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Feuille modale */
