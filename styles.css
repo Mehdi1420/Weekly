@@ -494,3 +494,47 @@ body.kb-open #onboarding, body.kb-open #auth { top: var(--vv-top, 0px); bottom: 
 /* Sensation d'app : pas de sélection de texte ni de menu « copier » en appui long sur l'interface */
 body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 input, textarea, [contenteditable], .selectable-text { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+
+/* ---------- Identité de chaque section ----------
+   Chaque onglet a sa couleur, son dégradé et son icône : boutons, bulle de l'onglet,
+   lueur en haut de page et pastille du titre changent avec la section. */
+body { --sec: #7b5ce8; --sec-grad: var(--grad); --sec-icon: "🗓️"; }
+body[data-tab="week"]     { --sec: #6d5df5; --sec-grad: linear-gradient(135deg, #5f55f0 0%, #9b5de5 55%, #e0679f 100%); --sec-icon: "🗓️"; }
+body[data-tab="goals"]    { --sec: #e07b0c; --sec-grad: linear-gradient(135deg, #f59e0b 0%, #f07a2c 55%, #e5484d 100%); --sec-icon: "🎯"; }
+body[data-tab="media"]    { --sec: #db3f7a; --sec-grad: linear-gradient(135deg, #ec4899 0%, #f43f5e 60%, #fb7a5c 100%); --sec-icon: "🎬"; }
+body[data-tab="ideas"]    { --sec: #0f9f88; --sec-grad: linear-gradient(135deg, #0ea5a4 0%, #14b87d 55%, #6cc04a 100%); --sec-icon: "💡"; }
+body[data-tab="health"]   { --sec: #e5484d; --sec-grad: linear-gradient(135deg, #f43f5e 0%, #f2604a 55%, #fb923c 100%); --sec-icon: "❤️"; }
+body[data-tab="settings"] { --sec: #5b6b82; --sec-grad: linear-gradient(135deg, #7c8aa0 0%, #5b6b82 60%, #46536a 100%); --sec-icon: "⚙️"; }
+body { --accent: color-mix(in srgb, var(--sec) 82%, black); --grad: var(--sec-grad);
+  --page: radial-gradient(120% 55% at 50% -12%, color-mix(in srgb, var(--sec) 24%, var(--bg)) 0%, var(--bg) 62%) fixed, var(--bg); }
+@media (prefers-color-scheme: dark) {
+  body { --accent: color-mix(in srgb, var(--sec) 72%, white);
+    --page: radial-gradient(120% 55% at 50% -12%, color-mix(in srgb, var(--sec) 26%, var(--bg)) 0%, var(--bg) 62%) fixed, var(--bg); }
+}
+body { background: var(--page); }
+.primary { box-shadow: 0 8px 20px color-mix(in srgb, var(--sec) 35%, transparent); }
+
+/* Titre de section : pastille avec l'icône de la section */
+main .header h1 { display: flex; align-items: center; gap: 12px; min-width: 0; }
+main .header h1::before {
+  content: var(--sec-icon); flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 15px;
+  background: var(--sec-grad); font-size: 24px; letter-spacing: 0;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--sec) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+main .subtitle { padding-left: 58px; margin-top: -8px; }
+.section-title { color: color-mix(in srgb, var(--sec) 70%, var(--muted)); }
+
+/* Onglet actif : couleur et bulle de la section */
+.tabbar button.active { color: var(--accent); }
+@media (max-width: 899px) { .tabbar::before { background: color-mix(in srgb, var(--sec) 16%, transparent); transition: transform .5s cubic-bezier(.34, 1.25, .5, 1), background-color .4s; } }
+@media (min-width: 900px) { .tabbar button.active { background: color-mix(in srgb, var(--sec) 14%, transparent); } }
+
+/* Catégories : pastilles d'icône teintées */
+.cat-ico { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; font-size: 19px;
+  background: color-mix(in srgb, var(--c) 18%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 25%, transparent); }
+.cat-ico.small { width: 28px; height: 28px; border-radius: 9px; font-size: 14px; }
+.cat-title { color: color-mix(in srgb, var(--c) 75%, var(--text)); display: flex; align-items: center; gap: 6px; }
+.cat-chip { background: color-mix(in srgb, var(--c) 14%, var(--card)); border-color: color-mix(in srgb, var(--c) 25%, transparent); }
+.wg-ico { margin-right: 3px; font-size: 11px; }
+.idea { gap: 12px; }
+main .header h1 { font-size: clamp(25px, 7.4vw, 34px); }

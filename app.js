@@ -3,16 +3,18 @@
 // ---------- Données ----------
 
 const CATEGORIES = [
-  { id: 'travail', name: 'Travail', color: '#5b8def' },
-  { id: 'sport', name: 'Sport', color: '#34c759' },
-  { id: 'social', name: 'Social', color: '#ff9f0a' },
-  { id: 'loisirs', name: 'Loisirs', color: '#af52de' },
-  { id: 'maison', name: 'Maison', color: '#a2845e' },
-  { id: 'sante', name: 'Santé', color: '#ff375f' },
-  { id: 'etudes', name: 'Études', color: '#30b0c7' },
-  { id: 'autre', name: 'Autre', color: '#8e8e93' },
+  { id: 'travail', name: 'Travail', color: '#5b8def', icon: '💼' },
+  { id: 'sport', name: 'Sport', color: '#34c759', icon: '🏃' },
+  { id: 'social', name: 'Social', color: '#ff9f0a', icon: '👥' },
+  { id: 'loisirs', name: 'Loisirs', color: '#af52de', icon: '🎮' },
+  { id: 'maison', name: 'Maison', color: '#a2845e', icon: '🏠' },
+  { id: 'sante', name: 'Santé', color: '#ff375f', icon: '🧘' },
+  { id: 'etudes', name: 'Études', color: '#30b0c7', icon: '🎓' },
+  { id: 'autre', name: 'Autre', color: '#8e8e93', icon: '✨' },
 ];
 const cat = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
+// Pastille d'icône teintée de la couleur de la catégorie
+const catIcon = (id, size = '') => { const c = cat(id); return `<span class="cat-ico ${size}" style="--c:${c.color}">${c.icon}</span>`; };
 
 const STORAGE_KEY = 'ma-semaine-v1';
 
@@ -159,6 +161,7 @@ function toast(msg) {
 
 function render() {
   view.classList.toggle('wide', state.tab === 'week');
+  document.body.dataset.tab = state.tab; // couleurs et icône propres à chaque section
   // Onglets selon les modules choisis au questionnaire
   const mods = prefs().modules;
   const hidden = { goals: !mods.goals, health: !mods.forme };
@@ -263,7 +266,7 @@ function renderWeek() {
   const totalEntries = Object.entries(totals);
   if (totalEntries.length) {
     html += `<div class="chips">${totalEntries.map(([c, m]) =>
-      `<span class="chip"><span class="dot" style="background:${cat(c).color}"></span>${cat(c).name} · ${fmtDuration(m)}</span>`).join('')}</div>`;
+      `<span class="chip cat-chip" style="--c:${cat(c).color}">${cat(c).icon} ${cat(c).name} · ${fmtDuration(m)}</span>`).join('')}</div>`;
   }
 
   html += renderWeekGrid(start, proposals, todayISO);
@@ -330,7 +333,7 @@ function renderWeekGrid(start, proposals, todayISO) {
         </div>`;
       }
       return `<button class="wg-ev ${ev.done ? 'done' : ''} ${short ? 'short' : ''}" style="${style}" data-action="edit" data-id="${ev.id}">
-        <div class="wg-t">${esc(ev.title)}${ev.routineId ? ' <span class="routine-icon">↻</span>' : ''}</div>
+        <div class="wg-t"><span class="wg-ico">${cat(ev.category).icon}</span>${esc(ev.title)}${ev.routineId ? ' <span class="routine-icon">↻</span>' : ''}</div>
         ${short ? '' : `<div class="wg-h">${ev.start}–${ev.end}</div>`}
       </button>`;
     }).join('');
@@ -449,7 +452,7 @@ function renderIdeas() {
     <p class="subtitle">Ta banque d'idées pour remplir la semaine</p>
     <div class="chips">
       <button class="chip selectable ${state.ideaFilter === 'all' ? 'active' : ''}" data-action="filter" data-cat="all">Toutes</button>
-      ${CATEGORIES.map(c => `<button class="chip selectable ${state.ideaFilter === c.id ? 'active' : ''}" data-action="filter" data-cat="${c.id}"><span class="dot" style="background:${c.color}"></span>${c.name}</button>`).join('')}
+      ${CATEGORIES.map(c => `<button class="chip selectable ${state.ideaFilter === c.id ? 'active' : ''}" data-action="filter" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('')}
     </div>`;
 
   if (sug) {
@@ -467,15 +470,22 @@ function renderIdeas() {
     html += `<button class="primary" data-action="suggest">🎲 Propose-moi une activité</button>`;
   }
 
-  html += ideas.length ? `<div class="list">${ideas.map(i => `
+  const ideaRow = i => `
     <div class="idea">
-      <span class="dot" style="background:${cat(i.category).color}"></span>
+      ${catIcon(i.category)}
       <button class="idea-main" data-action="edit-idea" data-id="${i.id}">
         <div class="idea-title">${esc(i.title)}</div>
         <div class="idea-meta">${cat(i.category).name} · ${fmtDuration(i.duration)}${plannedThisWeek(i.title) ? ' · ✓ cette semaine' : ''}</div>
       </button>
       <button class="plan-btn" data-action="plan" data-id="${i.id}">Planifier</button>
-    </div>`).join('')}</div>` : '<p class="help">Aucune idée dans cette catégorie. Appuie sur + pour en ajouter.</p>';
+    </div>`;
+  const groups = state.ideaFilter === 'all'
+    ? CATEGORIES.map(c => [c, ideas.filter(i => cat(i.category).id === c.id)]).filter(([, l]) => l.length)
+    : [[null, ideas]];
+  html += ideas.length ? groups.map(([c, list]) => `
+    ${c ? `<div class="section-title cat-title" style="--c:${c.color}">${c.icon} ${c.name}</div>` : ''}
+    <div class="list">${list.map(ideaRow).join('')}</div>`).join('')
+    : '<p class="help">Aucune idée dans cette catégorie. Appuie sur + pour en ajouter.</p>';
 
   view.innerHTML = html;
 }
