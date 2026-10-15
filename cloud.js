@@ -211,6 +211,11 @@ async function deleteCloudData() {
 
 let authMode = 'login';
 
+const AUTH_TEXT = {
+  login: { title: 'Weekly', lead: 'Connecte-toi pour retrouver tes données sur tous tes appareils.', submit: 'Se connecter', pwd: 'current-password', ph: '' },
+  signup: { title: 'Créer ton compte', lead: 'Tes données seront liées à ton compte et retrouvées sur tous tes appareils.', submit: 'Créer mon compte', pwd: 'new-password', ph: '8 caractères minimum' },
+};
+
 function showAuth(mode = 'login', message = '') {
   authMode = mode;
   let el = document.getElementById('auth');
@@ -222,28 +227,47 @@ function showAuth(mode = 'login', message = '') {
     el.addEventListener('submit', onAuthSubmit);
   }
   document.body.classList.add('ob-open');
-  const signup = mode === 'signup';
+  const email = el.querySelector('[name=email]')?.value || '';
   const forgot = mode === 'forgot';
+  const t = AUTH_TEXT[mode] || AUTH_TEXT.login;
   el.innerHTML = `
     <form class="ob-inner auth-inner" novalidate>
       <div class="ob-body">
         <img class="auth-logo" src="icons/icon-192.png" alt="">
-        <h1>${forgot ? 'Mot de passe oublié' : signup ? 'Créer ton compte' : 'Weekly'}</h1>
-        <p class="ob-lead">${forgot ? 'Tu vas recevoir un e-mail pour choisir un nouveau mot de passe.'
-          : signup ? 'Tes données seront liées à ton compte et retrouvées sur tous tes appareils.'
-          : 'Connecte-toi pour retrouver tes données sur tous tes appareils.'}</p>
-        ${!forgot ? `<div class="seg"><button type="button" data-auth="login" class="${!signup ? 'on' : ''}">Connexion</button><button type="button" data-auth="signup" class="${signup ? 'on' : ''}">Créer un compte</button></div>` : ''}
+        <h1 data-t="title">${forgot ? 'Mot de passe oublié' : t.title}</h1>
+        <p class="ob-lead" data-t="lead">${forgot ? 'Tu vas recevoir un e-mail pour choisir un nouveau mot de passe.' : t.lead}</p>
+        ${!forgot ? `<div class="seg ${mode === 'signup' ? 'right' : ''}"><button type="button" data-auth="login" class="${mode !== 'signup' ? 'on' : ''}">Connexion</button><button type="button" data-auth="signup" class="${mode === 'signup' ? 'on' : ''}">Créer un compte</button></div>` : ''}
         <div class="field">
-          <label>E-mail <input type="email" name="email" autocomplete="email" inputmode="email" required></label>
-          ${forgot ? '' : `<label>Mot de passe <input type="password" name="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="8" required placeholder="${signup ? '8 caractères minimum' : ''}"></label>`}
+          <label>E-mail <input type="email" name="email" autocomplete="email" inputmode="email" required value="${esc(email)}"></label>
+          ${forgot ? '' : `<label>Mot de passe <input type="password" name="password" autocomplete="${t.pwd}" minlength="8" required placeholder="${t.ph}"></label>`}
         </div>
         ${message ? `<p class="auth-msg">${esc(message)}</p>` : ''}
-        <button type="submit" class="primary">${forgot ? 'Envoyer l\'e-mail' : signup ? 'Créer mon compte' : 'Se connecter'}</button>
+        <button type="submit" class="primary" data-t="submit">${forgot ? 'Envoyer l\'e-mail' : t.submit}</button>
         ${forgot ? '<button type="button" class="text-btn auth-link" data-auth="login">← Retour à la connexion</button>'
-          : signup ? '' : '<button type="button" class="text-btn auth-link" data-auth="forgot">Mot de passe oublié ?</button>'}
+          : `<button type="button" class="text-btn auth-link" data-auth="forgot" ${mode === 'signup' ? 'hidden' : ''}>Mot de passe oublié ?</button>`}
         ${getSession() ? '' : '<button type="button" class="text-btn auth-link muted" data-auth="guest">Continuer sans compte</button>'}
       </div>
     </form>`;
+}
+
+// Connexion ⇄ Créer un compte sans tout redessiner : la bulle glisse et les textes se fondent
+function switchAuthMode(el, mode) {
+  authMode = mode;
+  const t = AUTH_TEXT[mode];
+  const seg = el.querySelector('.seg');
+  seg.classList.toggle('right', mode === 'signup');
+  seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.auth === mode));
+  el.querySelector('.auth-msg')?.remove();
+  const pwd = el.querySelector('[name=password]');
+  pwd.autocomplete = t.pwd;
+  pwd.placeholder = t.ph;
+  el.querySelector('[data-auth=forgot]').hidden = mode === 'signup';
+  el.querySelectorAll('[data-t]').forEach(n => {
+    n.classList.remove('auth-swap');
+    void n.offsetWidth;
+    n.textContent = t[n.dataset.t];
+    n.classList.add('auth-swap');
+  });
 }
 
 function hideAuth() {
@@ -260,6 +284,8 @@ function onAuthClick(e) {
     localStorage.setItem(GUEST_KEY, '1');
     hideAuth();
     afterAuthFlow();
+  } else if ((m === 'login' || m === 'signup') && authMode !== 'forgot' && e.currentTarget.querySelector('.seg')) {
+    if (m !== authMode) switchAuthMode(e.currentTarget, m);
   } else showAuth(m);
 }
 

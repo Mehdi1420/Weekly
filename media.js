@@ -240,7 +240,7 @@ function renderMedia() {
     <div class="chips" style="margin-top:14px">
       ${[['all', 'Tout'], ...Object.entries(MEDIA_TYPES).map(([k, v]) => [k, `${v.icon} ${v.plural}`])].map(([k, l]) => `<button class="chip selectable ${f === k ? 'active' : ''}" data-action="media-filter" data-f="${k}">${l}</button>`).join('')}
     </div>
-    <div class="seg" style="max-width:420px">${[['active', 'À suivre'], ['done', 'Terminés'], ['all', 'Tout']].map(([k, l]) => `<button data-action="media-status" data-s="${k}" class="${sf === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="seg" style="max-width:420px;--n:3;--i:${['active', 'done', 'all'].indexOf(sf)}">${[['active', 'À suivre'], ['done', 'Terminés'], ['all', 'Tout']].map(([k, l]) => `<button data-action="media-status" data-s="${k}" class="${sf === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${items.length ? `<div class="media-grid">${items.map(mediaCard).join('')}</div>`
       : '<p class="help">Rien ici pour l\'instant. Ajoute un titre ou importe une liste (un titre par ligne).</p>'}`;
 }
@@ -250,7 +250,7 @@ function renderMedia() {
 function openMediaSearch(type = state.mediaFilter && state.mediaFilter !== 'all' ? state.mediaFilter : 'series') {
   sheetForm.innerHTML = `
     <div class="sheet-head"><button type="button" class="text-btn" data-close>Fermer</button><h2>Ajouter un titre</h2><span></span></div>
-    <div class="seg">${Object.entries(MEDIA_TYPES).map(([k, v]) => `<button type="button" data-type="${k}" class="${k === type ? 'on' : ''}">${v.icon} ${v.label}</button>`).join('')}</div>
+    <div class="seg" style="--n:${Object.keys(MEDIA_TYPES).length};--i:${Object.keys(MEDIA_TYPES).indexOf(type)}">${Object.entries(MEDIA_TYPES).map(([k, v]) => `<button type="button" data-type="${k}" class="${k === type ? 'on' : ''}">${v.icon} ${v.label}</button>`).join('')}</div>
     <div class="field"><label><input type="search" name="q" placeholder="Titre…" autocomplete="off" enterkeyhint="search"></label></div>
     <button type="submit" class="primary">Rechercher</button>
     <div id="media-results"></div>`;
@@ -262,6 +262,7 @@ function openMediaSearch(type = state.mediaFilter && state.mediaFilter !== 'all'
     b.onclick = () => {
       current = b.dataset.type;
       sheetForm.querySelectorAll('[data-type]').forEach(x => x.classList.toggle('on', x === b));
+      b.parentElement.style.setProperty('--i', Object.keys(MEDIA_TYPES).indexOf(b.dataset.type));
       if (sheetForm.q.value.trim()) sheetForm.requestSubmit();
     };
   });
