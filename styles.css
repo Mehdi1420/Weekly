@@ -463,3 +463,4 @@ a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; 
 .upd-empty { font-size: 14px; color: var(--muted); }
 #upd-result .primary { margin-top: 4px; }
 .week-actions .secondary { flex: 1 !important; font-size: 15px; }
+.push-code summary { color: var(--accent); font-weight: 600; padding: 10px 4px; cursor: pointer; }

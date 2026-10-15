@@ -1540,19 +1540,36 @@ async function enablePush() {
   }
 }
 
+// Page des secrets GitHub du dépôt qui héberge l'app (https://<compte>.github.io/<dépôt>/)
+function secretsUrl() {
+  const owner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : '';
+  const repo = location.pathname.split('/').filter(Boolean)[0];
+  return owner && repo ? `https://github.com/${owner}/${repo}/settings/secrets/actions` : '';
+}
+
 function showPushCode(code) {
+  const url = secretsUrl();
   sheetForm.innerHTML = `
     <div class="sheet-head">
-      <span></span><h2>Code de notification</h2>
+      <span></span><h2>Dernière étape</h2>
       <button type="button" class="text-btn" data-close>OK</button>
     </div>
-    <p class="help" style="margin:0 4px 10px">Dernière étape (une seule fois) : copie ce code et colle-le dans le secret GitHub <b>PUSH_CONFIG</b> du dépôt (voir le README). Ce code est personnel : ne le partage pas.</p>
-    <div class="field"><label><textarea readonly style="min-height:120px;font-size:12px">${esc(code)}</textarea></label></div>
-    <button type="button" class="primary" id="copy-push">Copier le code</button>`;
+    <div class="card help-steps">
+      <p><b>1.</b> Touche le bouton ci-dessous : le code est copié et la page GitHub s'ouvre.</p>
+      <p><b>2.</b> Sur GitHub, touche <b>PUSH_CONFIG</b> (ou <b>New repository secret</b> s'il n'existe pas, avec le nom <b>PUSH_CONFIG</b>).</p>
+      <p><b>3.</b> Colle le code dans <b>Secret</b> puis enregistre. C'est tout : les rappels du dimanche (pesée et préparation de la semaine) arriveront ici.</p>
+    </div>
+    ${url ? `<a class="primary link-btn" id="copy-push" href="${url}" target="_blank" rel="noopener">📋 Copier le code et ouvrir GitHub</a>` : '<button type="button" class="primary" id="copy-push">Copier le code</button>'}
+    <details class="push-code"><summary>Voir le code</summary>
+      <div class="field"><label><textarea readonly style="min-height:120px;font-size:12px">${esc(code)}</textarea></label></div>
+    </details>
+    <p class="help" style="margin:8px 4px 0">Ce code est personnel : ne le partage pas.</p>`;
   sheetForm.onsubmit = e => e.preventDefault();
   sheetForm.querySelector('[data-close]').onclick = () => sheet.close();
-  sheetForm.querySelector('#copy-push').onclick = () =>
-    navigator.clipboard.writeText(code).then(() => toast('Code copié'), () => toast('Sélectionne le texte et copie-le'));
+  // La copie se fait au toucher (avant l'ouverture de GitHub) pour être autorisée par l'iPhone
+  sheetForm.querySelector('#copy-push').addEventListener('click', () => {
+    navigator.clipboard.writeText(code).then(() => toast('Code copié : colle-le dans PUSH_CONFIG'), () => toast('Copie impossible : ouvre « Voir le code » et copie-le'));
+  });
   sheet.showModal();
 }
 
