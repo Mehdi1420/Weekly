@@ -150,7 +150,7 @@ function detectRoutines() {
     if (!days.length) return;
     const sel = list.filter(e => days.includes(weekdayOf(e.date)));
     const start = roundTo(median(sel.map(e => toMin(e.start))));
-    const dur = Math.max(15, roundTo(median(sel.map(e => toMin(e.end) - toMin(e.start)))));
+    const dur = Math.max(15, roundTo(median(sel.map(durMin))));
     const cats = {};
     sel.forEach(e => { cats[e.category] = (cats[e.category] || 0) + 1; });
     out.push({
@@ -194,7 +194,9 @@ function scoreIdea(idea, iso, startMin) {
 // et des créneaux déjà réservés par d'autres propositions (`extra`)
 function freeSlots(iso, from = 0, extra = [], win = null) {
   const [a, b] = win || leisureWindow(iso);
-  const busy = [...eventsOn(iso).map(e => [toMin(e.start), toMin(e.end)]), ...extra].sort((x, y) => x[0] - y[0]);
+  // Les soirées de la veille qui finissent après minuit occupent aussi le début de journée
+  const prevNight = eventsOn(toISO(addDays(fromISO(iso), -1))).filter(overnight).map(e => [0, toMin(e.end)]);
+  const busy = [...eventsOn(iso).map(e => [toMin(e.start), endMin(e)]), ...prevNight, ...extra].sort((x, y) => x[0] - y[0]);
   let cur = Math.max(a, from);
   const slots = [];
   for (const [s, e] of busy) {

@@ -196,7 +196,7 @@ function cleanLifeResult(r) {
     category: catIds.includes(x.category) ? x.category : 'autre',
     days: [...new Set((x.days || []).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b),
     start: time(x.start), end: time(x.end),
-  })).filter(x => x.title && x.days.length && x.start && x.end && toMin(x.end) > toMin(x.start));
+  })).filter(x => x.title && x.days.length && x.start && x.end && x.end !== x.start);
   const sports = (r.sports || []).map(s => String(s).trim()).filter(Boolean);
   const interests = (r.interests || []).map(s => String(s).trim()).filter(Boolean);
   return {

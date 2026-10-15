@@ -114,7 +114,7 @@ function cleanUpdates(list) {
       x.days = daysOk(x.days && x.days.length ? x.days : r && r.days);
       x.start = time(x.start) || (r && r.start) || '';
       x.end = time(x.end) || (r && r.end) || '';
-      if (!x.title || !x.days.length || !x.start || !x.end || toMin(x.end) <= toMin(x.start)) return;
+      if (!x.title || !x.days.length || !x.start || !x.end || x.end === x.start) return; // fin avant le début = le lendemain
       if (x.action === 'update_routine' && !r) x.action = 'add_routine';
       if (x.action === 'update_routine' && r.title === x.title && r.days.join() === x.days.join() && r.start === x.start && r.end === x.end && r.category === x.category) return;
       label = x.action === 'add_routine'
@@ -128,7 +128,7 @@ function cleanUpdates(list) {
       x.category = catOf(x.category);
       x.start = time(x.start);
       x.end = time(x.end) || (x.start ? fromMin(Math.min(23 * 60 + 59, toMin(x.start) + 60)) : '');
-      if (!x.title || !/^\d{4}-\d{2}-\d{2}$/.test(x.date || '') || !x.start || toMin(x.end) <= toMin(x.start)) return;
+      if (!x.title || !/^\d{4}-\d{2}-\d{2}$/.test(x.date || '') || !x.start || x.end === x.start) return;
       if (x.date < toISO(new Date())) return;
       label = `📅 Ajouter <b>${esc(x.title)}</b> · ${fmtShort(new Date(`${x.date}T12:00`))} · ${x.start}–${x.end}`;
     } else if (x.action === 'add_idea') {
