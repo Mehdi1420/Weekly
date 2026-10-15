@@ -423,11 +423,12 @@ const geminiKeyButton = () =>
 
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta';
 
-async function geminiFetch(path, key, body) {
+async function geminiFetch(path, key, body, signal) {
   const res = await fetch(`${GEMINI_API}/${path}`, {
     method: body ? 'POST' : 'GET',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -435,9 +436,45 @@ async function geminiFetch(path, key, body) {
     if (res.status === 429) throw new Error('limite gratuite atteinte, réessaie dans une minute');
     if (res.status === 400 && /api key/i.test(msg)) throw new Error('clé invalide');
     if (res.status === 403) throw new Error('clé refusée ou service indisponible');
-    throw new Error(msg || `erreur ${res.status}`);
+    const e = new Error(msg || `erreur ${res.status}`);
+    e.status = res.status;
+    throw e;
   }
   return res.json();
+}
+
+// Génération rapide : les modèles Gemini récents « réfléchissent » avant de répondre, ce qui prend
+// souvent 10 à 30 s. Pour extraire des infos d'un texte, ce n'est pas utile : on coupe (ou réduit)
+// la réflexion. Selon la version du modèle, le réglage accepté diffère : on essaie du plus rapide
+// au plus prudent et on retient celui qui marche.
+function thinkingOptions(model) {
+  const v = parseFloat((model.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1]);
+  if (v >= 3) return [{ thinkingLevel: 'minimal' }, { thinkingLevel: 'low' }, null];
+  if (v >= 2.5) return [{ thinkingBudget: 0 }, { thinkingBudget: 512 }, null];
+  return [null];
+}
+
+async function geminiGenerate(model, key, body, timeoutMs = 30000) {
+  const memo = (data.settings.geminiThinking ||= {});
+  const opts = thinkingOptions(model);
+  const start = opts.findIndex(o => JSON.stringify(o) === memo[model]);
+  for (const opt of opts.slice(Math.max(0, start))) {
+    const b = { ...body, generationConfig: { ...body.generationConfig, ...(opt ? { thinkingConfig: opt } : {}) } };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await geminiFetch(`models/${model}:generateContent`, key, b, ctrl.signal);
+      memo[model] = JSON.stringify(opt);
+      return res;
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('l\'IA met trop de temps à répondre');
+      // Réglage de réflexion refusé par ce modèle : on essaie le suivant
+      if (!(e.status === 400 && /think|budget|level/i.test(e.message)) || opt === null) throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error('réponse impossible');
 }
 
 // Le plus récent modèle « flash » stable qui sait générer du texte
@@ -478,7 +515,7 @@ async function estimateGemini(text, key, model) {
       },
     },
   };
-  const res = await geminiFetch(`models/${model}:generateContent`, key, body);
+  const res = await geminiGenerate(model, key, body);
   const part = res.candidates && res.candidates[0] && res.candidates[0].content && res.candidates[0].content.parts.find(p => p.text);
   if (!part) throw new Error('réponse vide');
   const items = JSON.parse(part.text).items || [];
