@@ -540,7 +540,7 @@ function openTaskSheet(t, isNew) {
 function openProjectPicker() {
   sheetForm.innerHTML = `
     <div class="sheet-head"><button type="button" class="text-btn" data-close>Annuler</button><h2>Nouveau projet</h2><span></span></div>
-    ${[['aws', '☁️ Certification AWS', 'Programme en 10 étapes, 2 h 30 par semaine'],
+    ${[['cert', '🎓 Certification ou diplôme', 'Tu choisis laquelle ; 2 h 30 par semaine'],
       ['code', '💻 Progresser en programmation', '7 étapes, 3 h par semaine'],
       ['reading', '📖 Lecture', '20 min par jour, suivi des pages, suggestions de livres'],
       ['custom', '🎯 Autre projet', 'Ton propre objectif, tes étapes']]
@@ -549,9 +549,12 @@ function openProjectPicker() {
   sheetForm.querySelector('[data-close]').onclick = () => sheet.close();
   sheetForm.querySelectorAll('[data-kind]').forEach(b => {
     b.onclick = () => {
-      const p = newProject(b.dataset.kind);
+      const p = b.dataset.kind === 'cert'
+        ? { ...newProject('custom'), title: 'Certification ', icon: '🎓', type: 'cert', category: 'etudes', weeklyMinutes: 150, session: 60 }
+        : newProject(b.dataset.kind);
       sheet.close();
       openProjectSheet(p, true);
+      if (p.type === 'cert') setTimeout(() => { const i = sheetForm.title; i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250);
     };
   });
   sheet.showModal();
@@ -594,6 +597,11 @@ function openProjectSheet(p, isNew) {
       session: Math.max(15, parseInt(f.get('session'), 10) || 60), deadline: f.get('deadline'),
       category: f.get('category'), notes: f.get('notes').trim(),
     });
+    // Certification AWS : on reprend le programme détaillé (étapes, conseils)
+    if (isNew && p.type === 'cert' && !p.steps.length && /\b(aws|amazon)\b/i.test(p.title)) {
+      const t = newProject('aws');
+      Object.assign(p, { steps: t.steps, notes: p.notes || t.notes });
+    }
     if (isNew) data.projects.push(p);
     save();
     sheet.close();
