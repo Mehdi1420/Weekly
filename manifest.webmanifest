@@ -1,6 +1,6 @@
 {
-  "name": "Ma Semaine",
-  "short_name": "Ma Semaine",
+  "name": "Weekly",
+  "short_name": "Weekly",
   "description": "Mon planning et mes idées d'activités de la semaine",
   "lang": "fr",
   "start_url": "./",

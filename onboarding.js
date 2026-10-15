@@ -97,7 +97,7 @@ function renderOnboarding() {
   if (name === 'welcome') {
     body = `
       <div class="ob-hero">👋</div>
-      <h1>Bienvenue dans Ma Semaine</h1>
+      <h1>Bienvenue dans Weekly</h1>
       <p class="ob-lead">Quelques questions pour adapter l'app à toi. Ensuite, elle apprend de tes habitudes et s'ajuste toute seule.</p>
       <div class="field"><label>Ton prénom <input type="text" data-ob="name" value="${esc(p.name)}" placeholder="Facultatif" autocomplete="given-name"></label></div>`;
   } else if (name === 'modules') {
