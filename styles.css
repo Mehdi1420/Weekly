@@ -480,20 +480,6 @@ a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; 
 .field select { flex: 1; min-width: 0; text-align: right; text-align-last: right; }
 .field input[type="date"] { text-align: right; min-width: 0; }
 
-/* ---------- Clavier ouvert (classe posée par keyboardWatch) ---------- */
-.tabbar { transition: transform .28s cubic-bezier(.3, .7, .4, 1), opacity .2s; }
-body.kb-open .tabbar { transform: translateY(160%); opacity: 0; pointer-events: none; }
-/* Fenêtres du bas : collées au-dessus du clavier au lieu d'être poussées hors de l'écran */
-body.kb-open dialog[open] {
-  margin: 0 auto; top: auto; bottom: calc(100% - var(--vv-top, 0px) - var(--vvh, 100%));
-  max-height: calc(var(--vvh, 100dvh) - 12px); overflow-y: auto; transition: bottom .25s ease-out;
-}
-/* Questionnaire et connexion : limités à la zone visible, les boutons restent atteignables */
-body.kb-open #onboarding, body.kb-open #auth { top: var(--vv-top, 0px); bottom: auto; height: var(--vvh, 100%); }
-
-/* Sensation d'app : pas de sélection de texte ni de menu « copier » en appui long sur l'interface */
-body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-input, textarea, [contenteditable], .selectable-text { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 /* ---------- Identité de chaque section ----------
    Chaque onglet a sa couleur, son dégradé et son icône : boutons, bulle de l'onglet,

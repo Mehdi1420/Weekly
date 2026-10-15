@@ -1807,50 +1807,6 @@ document.addEventListener('visibilitychange', () => {
   fetchStepsFromGist(state.stepsPending);
 });
 
-// ---------- Clavier de l'iPhone ----------
-// Dans une app web, iOS fait glisser toute la page quand le clavier s'ouvre et laisse la barre
-// d'onglets flotter au-dessus. On mesure la zone réellement visible (visualViewport) pour : cacher
-// la barre d'onglets, poser les fenêtres et le questionnaire juste au-dessus du clavier, et
-// remettre la page en place quand il se ferme.
-(function keyboardWatch() {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  const root = document.documentElement;
-  let full = vv.height;
-  let open = false;
-  const typing = () => /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')
-    && !/^(checkbox|radio|button|submit|range|color|file)$/.test(document.activeElement.type);
-  const update = () => {
-    if (!typing()) full = Math.max(full, vv.height);
-    root.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
-    root.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
-    const isOpen = typing() && vv.height < full - 120;
-    if (isOpen === open) return;
-    open = isOpen;
-    document.body.classList.toggle('kb-open', open);
-    if (open) {
-      // Le champ touché reste visible au-dessus du clavier
-      setTimeout(() => { const a = document.activeElement; if (a && a.scrollIntoView) a.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
-    } else {
-      window.scrollTo(window.scrollX, window.scrollY); // iOS laisse parfois la page décalée
-    }
-  };
-  vv.addEventListener('resize', update);
-  vv.addEventListener('scroll', update);
-  window.addEventListener('orientationchange', () => { full = 0; setTimeout(update, 300); });
-  document.addEventListener('focusin', e => {
-    // Touche « OK » du clavier sur les champs d'une ligne (sauf ceux qui ont déjà la leur)
-    if (e.target.tagName === 'INPUT' && !e.target.hasAttribute('enterkeyhint')) e.target.setAttribute('enterkeyhint', e.target.form ? 'go' : 'done');
-    setTimeout(update, 80);
-  });
-  // Hors formulaire (questionnaire), « OK » ferme simplement le clavier
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !e.target.form) e.target.blur();
-  });
-  document.addEventListener('focusout', () => setTimeout(update, 80));
-  update();
-})();
-
 // Ouverture depuis la notification du dimanche
 if (new URLSearchParams(location.search).has('preparer')) {
   history.replaceState(null, '', location.pathname);
