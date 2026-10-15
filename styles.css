@@ -435,3 +435,18 @@ dialog[open] { animation: up .38s cubic-bezier(.2, .9, .3, 1.04); }
 .forgot-link { display: block; margin: -4px 2px 12px auto; padding: 2px 4px; font-size: 14px; font-weight: 500; }
 .forgot-link[hidden] { display: none; }
 a.link-btn { text-align: center; text-decoration: none; box-sizing: border-box; }
+
+/* Démarrage : écrans qui apparaissent et disparaissent en fondu */
+.screen-in { animation: screen-in .45s cubic-bezier(.22, .9, .3, 1); }
+@keyframes screen-in { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+/* Écran en train de partir : il a perdu son id, on garde sa mise en page par-dessus tout */
+.screen-out { position: fixed; inset: 0; z-index: 70; background: var(--page); overflow: hidden; animation: screen-out .4s cubic-bezier(.4, 0, .6, 1) forwards; pointer-events: none; }
+@keyframes screen-out { to { opacity: 0; transform: scale(1.03); } }
+.ob-body.tab-in-r { animation: tab-in-r .45s cubic-bezier(.22, .9, .3, 1); }
+.ob-body.tab-in-l { animation: tab-in-l .45s cubic-bezier(.22, .9, .3, 1); }
+.ob-dots span { transition: background-color .45s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .screen-in, .ob-body.tab-in-r, .ob-body.tab-in-l { animation: tab-fade .2s ease-out; }
+  .screen-out { animation: screen-fade-out .2s forwards; }
+  @keyframes screen-fade-out { to { opacity: 0; } }
+}

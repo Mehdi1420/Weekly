@@ -257,7 +257,10 @@ function showAuth(mode = 'login', message = '') {
     document.body.appendChild(el);
     el.addEventListener('click', onAuthClick);
     el.addEventListener('submit', onAuthSubmit);
+    el.classList.add('screen-in');
   }
+  const prevMode = el.dataset.mode;
+  el.dataset.mode = mode;
   document.body.classList.add('ob-open');
   const email = el.querySelector('[name=email]')?.value || '';
   const forgot = mode === 'forgot';
@@ -280,6 +283,8 @@ function showAuth(mode = 'login', message = '') {
         ${getSession() || mode === 'reset' ? '' : '<button type="button" class="text-btn auth-link muted" data-auth="guest">Continuer sans compte</button>'}
       </div>
     </form>`;
+  // Connexion → Mot de passe oublié (et retour) : glissement plutôt qu'un saut
+  if (prevMode && prevMode !== mode) slideIn(el.querySelector('.ob-body'), mode === 'forgot' || mode === 'reset' ? 1 : -1);
 }
 
 // Connexion ⇄ Créer un compte sans tout redessiner : la bulle glisse et les textes se fondent
@@ -304,8 +309,9 @@ function switchAuthMode(el, mode) {
 
 function hideAuth() {
   const el = document.getElementById('auth');
-  if (el) el.remove();
+  if (el) el.removeAttribute('id');
   if (!document.getElementById('onboarding')) document.body.classList.remove('ob-open');
+  fadeOutRemove(el);
 }
 
 function onAuthClick(e) {

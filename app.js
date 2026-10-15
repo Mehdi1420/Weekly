@@ -1719,6 +1719,7 @@ if (new URLSearchParams(location.search).has('pesee')) {
 } else {
   render();
 }
+view.classList.add('screen-in');
 // Démarrage : écran de connexion (si les comptes sont activés et qu'on n'a pas choisi « sans compte »),
 // sinon questionnaire au premier lancement ; avec un compte, on récupère la dernière version du serveur.
 const authRedirect = cloudEnabled() ? readAuthRedirect() : null;

@@ -76,6 +76,7 @@ function startOnboarding(stepName) {
     el.id = 'onboarding';
     document.body.appendChild(el);
     el.addEventListener('click', onboardingClick);
+    el.classList.add('screen-in');
   }
   document.body.classList.add('ob-open');
   if (stepName) ob.step = Math.max(0, obVisibleSteps().indexOf(stepName));
@@ -88,7 +89,7 @@ function obVisibleSteps() {
 
 const chip = (group, id, label, on) => `<button type="button" class="chip selectable ${on ? 'active' : ''}" data-ob-chip="${group}" data-id="${id}">${label}</button>`;
 
-function renderOnboarding() {
+function renderOnboarding(dir = 0) {
   const steps = obVisibleSteps();
   const name = steps[ob.step];
   const p = ob.p;
@@ -197,16 +198,46 @@ function renderOnboarding() {
       <p class="ob-lead">Note tes activités au fil des jours : l'app repère tes routines, ajuste ses propositions et retient ce que tu refuses.</p>`;
   }
   const last = ob.step === steps.length - 1;
-  document.getElementById('onboarding').innerHTML = `
+  const el = document.getElementById('onboarding');
+  const nav = `
+        ${ob.step > 0 ? '<button type="button" class="secondary" data-ob-nav="back">Retour</button>' : (data.settings.onboarded ? '<button type="button" class="secondary" data-ob-nav="close">Annuler</button>' : '')}
+        <button type="button" class="primary" data-ob-nav="${last ? 'finish' : 'next'}">${last ? 'C\'est parti' : 'Continuer'}</button>`;
+  const dots = el.querySelectorAll('.ob-dots span');
+  if (dots.length === steps.length) {
+    // Mise à jour sur place : la barre de progression avance en douceur et seul le contenu change
+    dots.forEach((d, i) => d.classList.toggle('on', i <= ob.step));
+    el.querySelector('.ob-body').innerHTML = body;
+    el.querySelector('.ob-nav').innerHTML = nav;
+  } else {
+    el.innerHTML = `
     <div class="ob-inner">
       <div class="ob-dots">${steps.map((_, i) => `<span class="${i <= ob.step ? 'on' : ''}"></span>`).join('')}</div>
       <div class="ob-body">${body}</div>
-      <div class="ob-nav">
-        ${ob.step > 0 ? '<button type="button" class="secondary" data-ob-nav="back">Retour</button>' : (data.settings.onboarded ? '<button type="button" class="secondary" data-ob-nav="close">Annuler</button>' : '')}
-        <button type="button" class="primary" data-ob-nav="${last ? 'finish' : 'next'}">${last ? 'C\'est parti' : 'Continuer'}</button>
-      </div>
+      <div class="ob-nav">${nav}</div>
     </div>`;
-  document.getElementById('onboarding').scrollTop = 0;
+  }
+  if (dir) {
+    el.scrollTop = 0;
+    slideIn(el.querySelector('.ob-body'), dir);
+  }
+}
+
+// Glissement d'une page à l'autre (même mouvement que les onglets)
+function slideIn(node, dir) {
+  if (!node) return;
+  node.classList.remove('tab-in-r', 'tab-in-l');
+  void node.offsetWidth;
+  node.classList.add(dir > 0 ? 'tab-in-r' : 'tab-in-l');
+}
+
+// Fondu de sortie d'un écran plein (connexion, questionnaire) avant de le retirer
+function fadeOutRemove(el, done) {
+  if (!el) { if (done) done(); return; }
+  el.classList.add('screen-out');
+  let finished = false;
+  const end = () => { if (finished) return; finished = true; el.remove(); if (done) done(); };
+  el.addEventListener('animationend', e => { if (e.target === el) end(); }); // ignorer les animations des enfants
+  setTimeout(end, 500);
 }
 
 // Lit les champs de l'étape affichée avant de changer d'étape
@@ -239,9 +270,9 @@ function onboardingClick(e) {
     renderOnboarding();
   } else if (t.dataset.obNav === 'next') {
     if (obVisibleSteps()[ob.step] === 'life' && ob.lifeText && ob.lifeText !== ob.analyzedText) analyzeLifeStep(t);
-    else { ob.step++; renderOnboarding(); }
+    else { ob.step++; renderOnboarding(1); }
   }
-  else if (t.dataset.obNav === 'back') { ob.step--; renderOnboarding(); }
+  else if (t.dataset.obNav === 'back') { ob.step--; renderOnboarding(-1); }
   else if (t.dataset.obNav === 'close') closeOnboarding();
   else if (t.dataset.obNav === 'finish') finishOnboarding();
 }
@@ -260,16 +291,17 @@ async function analyzeLifeStep(btn) {
   applyLifeToOnboarding(res);
   ob.analyzedText = ob.lifeText;
   ob.step++;
-  renderOnboarding();
+  renderOnboarding(1);
   if (res.error) toast(`IA indisponible (${res.error}) : analyse simplifiée`);
   else toast(res.routines.length ? `${res.routines.length} activité${res.routines.length > 1 ? 's' : ''} régulière${res.routines.length > 1 ? 's' : ''} repérée${res.routines.length > 1 ? 's' : ''}` : 'Rien de régulier repéré : complète les étapes suivantes');
 }
 
 function closeOnboarding() {
   const el = document.getElementById('onboarding');
-  if (el) el.remove();
+  if (el) el.removeAttribute('id'); // un nouveau questionnaire peut s'ouvrir pendant le fondu
   document.body.classList.remove('ob-open');
   ob = null;
+  fadeOutRemove(el);
 }
 
 // ---------- Application des réponses ----------
