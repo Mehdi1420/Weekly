@@ -248,7 +248,7 @@ function renderWeek() {
   if (!isPast) {
     html += proposals.length
       ? `<div class="row-buttons"><button class="primary" data-action="props-all">✓ Tout accepter (${proposals.length})</button><button class="secondary" data-action="props-clear">Effacer</button></div>`
-      : '<button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button>';
+      : '<div class="row-buttons week-actions"><button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button><button class="secondary" data-action="tell-weekly">💬 Un changement ?</button></div>';
   }
 
   const totalEntries = Object.entries(totals);
@@ -496,7 +496,9 @@ function renderSettings() {
     <div class="header"><h1>Réglages</h1></div>
     ${renderAccount()}
     <div class="section-title">Mes préférences</div>
-    <button class="secondary" data-action="life-describe">Décrire ma semaine type</button>
+    <button class="secondary" data-action="tell-weekly">💬 Dis-le à Weekly : un changement en une phrase</button>
+    <p class="help" style="margin:-4px 4px 12px">« J'ai arrêté le foot », « je travaille le samedi maintenant », « dentiste jeudi 14h »… l'IA met l'app à jour pour toi.</p>
+    <button class="secondary" data-action="life-describe">Redécrire toute ma semaine type</button>
     <button class="secondary" data-action="onboarding">Refaire le questionnaire (goûts, horaires, modules)</button>
     <p class="help">Sports, centres d'intérêt, horaires, objectifs et modules affichés. Tes données sont conservées.</p>
     <div class="section-title">Profil (pour l'objectif calorique)</div>
@@ -1637,6 +1639,7 @@ view.addEventListener('click', e => {
     case 'check-updates': checkUpdates(); break;
     case 'safari-ok': state.safariDismissed = true; render(); break;
     case 'life-describe': startOnboarding('life'); break;
+    case 'tell-weekly': openUpdateSheet(); break;
     case 'life-later': state.lifeDismissed = true; render(); break;
     case 'today-yes': {
       const idea = data.ideas.find(i => i.id === id);
