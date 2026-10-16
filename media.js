@@ -80,18 +80,39 @@ const SEARCHERS = { series: searchSeries, film: searchFilms, game: searchGames, 
 
 // ---------- Ajout ----------
 
+// Les chaînes TV annoncent la durée de la case horaire (60 min) et non celle de l'épisode,
+// publicités comprises : on estime la vraie durée (60 → 43 min, 30 → 22 min…).
+const SLOT_RUNTIME = { 30: 22, 60: 43, 90: 65, 120: 85 };
+function fixSlotRuntimes(s) {
+  if (s.rtChecked) return false;
+  s.rtChecked = true;
+  const real = SLOT_RUNTIME[s.runtime];
+  if (!real || !s.episodes.length || !s.episodes.every(e => !e[4] || e[4] === s.runtime)) return false;
+  s.episodes.forEach(e => { e[4] = real; });
+  s.runtime = real;
+  s.runtimeApprox = true;
+  return true;
+}
+// Durée d'un épisode : celle choisie par l'utilisateur, sinon celle de la fiche
+const epMinutes = (s, e) => s.runtimeCustom || e[4] || s.runtime || 0;
+const seriesRuntime = s => s.runtimeCustom || s.runtime || 0;
+
 async function fetchSeriesDetails(tvmazeId) {
   const s = await getJSON(`https://api.tvmaze.com/shows/${tvmazeId}?embed[]=episodes&embed[]=nextepisode`);
   const eps = ((s._embedded && s._embedded.episodes) || [])
     .filter(e => e.season && e.number)
     .map(e => [e.season, e.number, e.name || '', e.airdate || '', e.runtime || s.averageRuntime || 0]);
   const next = s._embedded && s._embedded.nextepisode;
-  return {
+  const out = {
     episodes: eps, network: (s.network && s.network.name) || (s.webChannel && s.webChannel.name) || '',
     ended: s.status === 'Ended', runtime: s.averageRuntime || s.runtime || 0,
     nextEpisode: next ? { s: next.season, n: next.number, title: next.name, date: next.airdate } : null,
     summary: stripHtml(s.summary).slice(0, 400), refreshed: Date.now(),
   };
+  // Seulement pour les chaînes de télé (les plateformes donnent la vraie durée)
+  if (s.network && !s.webChannel) fixSlotRuntimes(out);
+  out.rtChecked = true;
+  return out;
 }
 
 async function addMedia(r) {
@@ -337,6 +358,30 @@ function statusSelect(m) {
     <label>Note <select name="rating"><option value="0">–</option>${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === m.rating ? 'selected' : ''}>${'★'.repeat(n)}</option>`).join('')}</select></label>`;
 }
 
+function seriesProgressHtml(m) {
+  const p = seriesProgress(m);
+  const rt = seriesRuntime(m);
+  const left = airedEpisodes(m).filter(e => !m.seen.includes(epKey(e))).reduce((t, e) => t + epMinutes(m, e), 0);
+  return `<div class="idea-title">${p.seen}/${p.aired} épisodes vus${rt ? ` · ${m.runtimeApprox && !m.runtimeCustom ? '≈ ' : ''}${rt} min chacun` : ''}</div>
+    <div class="meter small"><div class="meter-fill" style="width:${p.aired ? (p.seen / p.aired) * 100 : 0}%"></div></div>
+    <div class="idea-meta">${p.aired - p.seen > 0 && left ? `Encore ≈ ${fmtDuration(left)} pour rattraper` : p.aired && p.seen === p.aired ? 'À jour 🎉' : ''}${m.nextEpisode ? ` · Prochain épisode le ${fmtShort(fromISO(m.nextEpisode.date))}` : ''}</div>`;
+}
+
+// Compteurs de la fiche mis à jour sans la redessiner (on garde la position et les saisons ouvertes)
+function updateSeriesCounts(m) {
+  const card = sheetForm.querySelector('#series-progress');
+  if (card) card.innerHTML = seriesProgressHtml(m);
+  const seen = new Set(m.seen);
+  sheetForm.querySelectorAll('[data-season-count]').forEach(el => {
+    const sn = +el.dataset.seasonCount;
+    const eps = m.episodes.filter(e => e[0] === sn);
+    const n = eps.filter(e => seen.has(epKey(e))).length;
+    el.textContent = `${n}/${eps.length}`;
+    const btn = sheetForm.querySelector(`[data-season="${sn}"]`);
+    if (btn) btn.textContent = n === eps.length ? 'Tout décocher' : 'Tout cocher';
+  });
+}
+
 function openMediaSheet(m) {
   const head = `
     <div class="media-head">
@@ -346,23 +391,23 @@ function openMediaSheet(m) {
     </div>`;
   let body = '';
   if (m.type === 'series') {
+    if (fixSlotRuntimes(m)) save(); // séries ajoutées avant la correction de durée
     const p = seriesProgress(m);
     const seen = new Set(m.seen);
     const seasons = [...new Set(m.episodes.map(e => e[0]))];
     const today = toISO(new Date());
     body = `
       ${m.summary ? `<p class="help" style="margin:0 4px 10px">${esc(m.summary)}</p>` : ''}
-      <div class="card"><div class="idea-title">${p.seen}/${p.aired} épisodes vus${m.runtime ? ` · ${m.runtime} min chacun` : ''}</div>
-        <div class="meter small"><div class="meter-fill" style="width:${p.aired ? (p.seen / p.aired) * 100 : 0}%"></div></div>
-        <div class="idea-meta">${p.aired - p.seen > 0 && m.runtime ? `Encore ≈ ${fmtDuration((p.aired - p.seen) * m.runtime)} pour rattraper` : p.aired ? 'À jour 🎉' : ''}${m.nextEpisode ? ` · Prochain épisode le ${fmtShort(fromISO(m.nextEpisode.date))}` : ''}</div></div>
+      <div class="card" id="series-progress">${seriesProgressHtml(m)}</div>
+      <div class="field"><label>Durée d'un épisode <span class="end-wrap"><input type="number" name="epmin" min="1" max="300" inputmode="numeric" value="${seriesRuntime(m) || ''}" placeholder="min" style="max-width:70px"> min</span></label></div>
       ${seasons.map(sn => {
         const eps = m.episodes.filter(e => e[0] === sn);
         const seenN = eps.filter(e => seen.has(epKey(e))).length;
         return `<details class="season" ${eps.some(e => !seen.has(epKey(e))) && seasons.indexOf(sn) === seasons.findIndex(x => m.episodes.some(e => e[0] === x && !seen.has(epKey(e)))) ? 'open' : ''}>
-          <summary><b>Saison ${sn}</b><span class="idea-meta">${seenN}/${eps.length}</span>
+          <summary><b>Saison ${sn}</b><span class="idea-meta" data-season-count="${sn}">${seenN}/${eps.length}</span>
             <button type="button" class="text-btn" data-season="${sn}" style="padding:0 0 0 10px">${seenN === eps.length ? 'Tout décocher' : 'Tout cocher'}</button></summary>
           <div class="field">${eps.map(e => `
-            <label class="step ${e[3] && e[3] > today ? 'future' : ''}"><span><b>${e[1]}.</b> ${esc(e[2])}<br><small>${e[3] ? fmtShort(fromISO(e[3])) : ''}${e[4] ? ` · ${e[4]} min` : ''}</small></span>
+            <label class="step ${e[3] && e[3] > today ? 'future' : ''}"><span><b>${e[1]}.</b> ${esc(e[2])}<br><small>${e[3] ? fmtShort(fromISO(e[3])) : ''}${epMinutes(m, e) ? ` · ${m.runtimeApprox && !m.runtimeCustom ? '≈ ' : ''}${epMinutes(m, e)} min` : ''}</small></span>
               <input type="checkbox" data-ep="${epKey(e)}" ${seen.has(epKey(e)) ? 'checked' : ''} ${e[3] && e[3] > today ? 'disabled' : ''}></label>`).join('')}</div>
         </details>`;
       }).join('')}`;
@@ -386,8 +431,38 @@ function openMediaSheet(m) {
     <button type="button" class="danger" data-delete>Retirer de mes médias</button>`;
   // Épisodes : enregistrés dès qu'on coche
   sheetForm.querySelectorAll('[data-ep]').forEach(cb => {
-    cb.onchange = () => { toggleEpisode(m, cb.dataset.ep, cb.checked); save(); };
+    cb.onchange = () => {
+      const key = cb.dataset.ep;
+      if (cb.checked) {
+        // Épisodes précédents pas encore cochés : on propose de les marquer vus aussi
+        const aired = airedEpisodes(m);
+        const idx = aired.findIndex(e => epKey(e) === key);
+        const before = aired.slice(0, Math.max(0, idx)).filter(e => !m.seen.includes(epKey(e)));
+        if (before.length && confirm(`Marquer aussi ${before.length === 1 ? "l'épisode précédent" : `les ${before.length} épisodes précédents`} comme vu${before.length > 1 ? 's' : ''} ?`)) {
+          before.forEach(e => {
+            toggleEpisode(m, epKey(e), true);
+            const box = sheetForm.querySelector(`[data-ep="${epKey(e)}"]`);
+            if (box) box.checked = true;
+          });
+        }
+      }
+      toggleEpisode(m, key, cb.checked);
+      save();
+      updateSeriesCounts(m);
+    };
   });
+  const epmin = sheetForm.querySelector('[name=epmin]');
+  if (epmin) epmin.onchange = () => {
+    const v = parseInt(epmin.value, 10);
+    m.runtimeCustom = v > 0 ? Math.min(300, v) : undefined;
+    save();
+    updateSeriesCounts(m);
+    sheetForm.querySelectorAll('[data-ep]').forEach(cb => {
+      const e = m.episodes.find(x => epKey(x) === cb.dataset.ep);
+      const small = cb.closest('label').querySelector('small');
+      if (e && small) small.textContent = `${e[3] ? fmtShort(fromISO(e[3])) : ''}${epMinutes(m, e) ? ` · ${epMinutes(m, e)} min` : ''}`;
+    });
+  };
   sheetForm.querySelectorAll('[data-season]').forEach(b => {
     b.onclick = ev => {
       ev.preventDefault();
