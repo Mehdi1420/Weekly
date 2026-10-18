@@ -19,8 +19,9 @@ if (onlyAt) {
 
 webpush.setVapidDetails('mailto:ma-semaine@example.com', vapidPublicKey, vapidPrivateKey);
 const payload = JSON.stringify({
-  title: 'Weekly',
-  body: process.env.PUSH_BODY || "C'est dimanche : pense à te peser ⚖️",
+  // iOS ajoute déjà « from Weekly » sous le titre : le message sert de titre, sans répéter le nom de l'app
+  title: process.env.PUSH_BODY || "C'est dimanche : pense à te peser ⚖️",
+  body: '',
   url: process.env.PUSH_URL || './?pesee=1',
 });
 
