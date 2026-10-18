@@ -1,5 +1,5 @@
 // Cache hors-ligne. Incrémenter VERSION à chaque mise à jour de l'app.
-const VERSION = 'v49';
+const VERSION = 'v50';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'cloud.js', 'foods.js', 'brain.js', 'goals.js', 'onboarding.js', 'life.js', 'agenda.js', 'media.js', 'update.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -30,7 +30,7 @@ self.addEventListener('fetch', e => {
 
 // Notifications du dimanche (pesée le matin, préparation de la semaine à 17 h), envoyées par les GitHub Actions
 self.addEventListener('push', e => {
-  let msg = { title: "C'est dimanche : pense à te peser ⚖️", body: '' };
+  let msg = { title: "Pesée du dimanche ⚖️", body: '' };
   try { if (e.data) msg = { ...msg, ...e.data.json() }; } catch { /* texte brut */ }
   e.waitUntil(self.registration.showNotification(msg.title, { body: msg.body, icon: 'icons/icon-192.png', data: { url: msg.url || './?pesee=1' } }));
 });

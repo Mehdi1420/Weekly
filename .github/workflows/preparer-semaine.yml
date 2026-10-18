@@ -19,7 +19,7 @@ jobs:
       - run: node scripts/send-push.mjs
         env:
           PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
-          PUSH_BODY: "C'est dimanche : 2 minutes pour préparer ta semaine 🗓️"
+          PUSH_BODY: "Prépare ta semaine 🗓️"
           PUSH_URL: './?preparer=1'
           # Lancement manuel (« Run workflow ») : envoi immédiat pour tester
           PUSH_ONLY_AT_PARIS_HOUR: ${{ github.event_name == 'schedule' && '17' || '' }}
