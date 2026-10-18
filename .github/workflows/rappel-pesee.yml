@@ -18,3 +18,5 @@ jobs:
       - run: node scripts/send-push.mjs
         env:
           PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
+          # Abonnements automatiques des comptes (à ajouter une fois par le propriétaire du dépôt)
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}

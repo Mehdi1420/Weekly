@@ -532,8 +532,8 @@ function renderSettings() {
     <div class="section-title">Profil (pour l'objectif calorique)</div>
     <button class="secondary" data-action="profile">${profileComplete() ? `${p.sex === 'f' ? 'Femme' : 'Homme'} · ${ageOf(p)} ans · ${p.height} cm` : 'Renseigner mon profil'}</button>
     <div class="section-title">Rappel du dimanche</div>
-    <button class="secondary" data-action="enable-push">${data.settings.pushSub ? 'Voir mon code de notification' : 'Activer les notifications'}</button>
-    <p class="help">Chaque dimanche matin, une notification te rappelle de te peser. La mise en route (une seule fois) est expliquée dans le README.</p>
+    <button class="secondary" data-action="enable-push">${data.settings.pushSub ? (getSession() && CLOUD.pushServer ? '🔔 Notifications activées · réactiver' : 'Voir mon code de notification') : 'Activer les notifications'}</button>
+    <p class="help">${getSession() && CLOUD.pushServer ? 'Le dimanche : « Pesée du dimanche » le matin et « Prépare ta semaine » vers 17 h. Il suffit d\'autoriser les notifications, tout le reste est automatique.' : 'Le dimanche : pesée le matin et préparation de la semaine vers 17 h. Connecte-toi à un compte pour que tout se règle automatiquement.'}</p>
     <div class="section-title">Pas (app Santé)</div>
     <button class="secondary" data-action="steps-gist">${data.settings.stepsGist ? 'Synchro automatique activée · modifier' : 'Activer la synchro automatique'}</button>
     <p class="help">Une automatisation iPhone envoie tes pas plusieurs fois par jour ; l'app les récupère toute seule à l'ouverture. Mise en route dans le README.</p>
@@ -1638,6 +1638,13 @@ async function enablePush() {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keys.publicKey });
     data.settings.pushSub = JSON.stringify({ subscription: sub.toJSON(), vapidPublicKey: keys.publicKey, vapidPrivateKey: keys.privateKey });
     save();
+    // Avec un compte : l'abonnement part avec tes données, le serveur s'occupe du reste (rien à copier)
+    if (getSession() && CLOUD.pushServer) {
+      await cloudPush();
+      render();
+      toast(cloudState.error ? `Notifications activées, synchro à refaire : ${cloudState.error}` : '🔔 Notifications activées');
+      return;
+    }
     showPushCode(data.settings.pushSub);
   } catch (e) {
     alert(`Impossible d'activer les notifications : ${e.message}`);
