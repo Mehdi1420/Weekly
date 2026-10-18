@@ -2,9 +2,10 @@
 import webpush from 'web-push';
 
 // PUSH_CONFIG : le code copié depuis l'app (Réglages → Activer les notifications)
+// Notifications pas encore activées : on s'arrête sans erreur (pas de mail d'échec chaque semaine)
 if (!process.env.PUSH_CONFIG) {
-  console.error('Secret manquant : PUSH_CONFIG (voir le README).');
-  process.exit(1);
+  console.log('::notice::Notifications non configurées (secret PUSH_CONFIG absent, voir le README) : rien à envoyer.');
+  process.exit(0);
 }
 const { subscription, vapidPublicKey, vapidPrivateKey } = JSON.parse(process.env.PUSH_CONFIG);
 
