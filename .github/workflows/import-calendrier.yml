@@ -21,12 +21,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GIST_ID}" ] || [ -z "${GIST_TOKEN}" ]; then
-            echo "Secrets manquants : GIST_ID et GIST_TOKEN (voir le README)."
-            exit 1
+            # Pas encore configuré : on s'arrête sans erreur (pas de mail d'échec)
+            echo "::notice::Import non configuré (secrets GIST_ID et GIST_TOKEN absents, voir le README) : rien à faire."
+            exit 0
           fi
           if [ -z "${MOODLE_URLS}" ] && [ -z "${AGENDA_URLS}" ]; then
-            echo "Aucun calendrier configuré : ajoute MOODLE_ICS_URL et/ou AGENDA_ICS_URL."
-            exit 1
+            echo "::notice::Aucun calendrier configuré (MOODLE_ICS_URL / AGENDA_ICS_URL) : rien à faire."
+            exit 0
           fi
           # Télécharge chaque lien (webcal:// devient https://) dans le fichier donné
           fetch_all() {
