@@ -19,6 +19,8 @@ jobs:
       - run: node scripts/send-push.mjs
         env:
           PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
+          # Abonnements automatiques des comptes (à ajouter une fois par le propriétaire du dépôt)
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           PUSH_BODY: "Prépare ta semaine 🗓️"
           PUSH_URL: './?preparer=1'
           # Lancement manuel (« Run workflow ») : envoi immédiat pour tester
