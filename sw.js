@@ -1,6 +1,6 @@
 // Cache hors-ligne. Incrémenter VERSION à chaque mise à jour de l'app.
-const VERSION = 'v51';
-const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'cloud.js', 'foods.js', 'brain.js', 'goals.js', 'onboarding.js', 'life.js', 'agenda.js', 'media.js', 'update.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'v52';
+const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'cloud.js', 'planner.js', 'foods.js', 'brain.js', 'goals.js', 'onboarding.js', 'life.js', 'agenda.js', 'media.js', 'update.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   // cache: 'reload' : on prend les fichiers sur le serveur, jamais dans le cache du navigateur (sinon versions mélangées)

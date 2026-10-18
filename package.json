@@ -1,0 +1,9 @@
+{
+  "name": "weekly",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node planner.test.js",
+    "check": "node --check app.js && node --check brain.js && node --check goals.js && node --check life.js && node --check media.js && node --check cloud.js && node --check agenda.js && node --check planner.js"
+  }
+}
