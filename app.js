@@ -30,6 +30,25 @@ const DEFAULT_IDEAS = [
   { title: 'Méditation', category: 'sante', duration: 15 },
 ];
 
+const CORE_PLANNER_IDEAS = [
+  { title: 'Aircraft Propulsion', category: 'etudes', duration: 90, priority: 10 },
+  { title: 'Aircraft Performance and Stability', category: 'etudes', duration: 90, priority: 10 },
+  { title: 'Aerodynamics', category: 'etudes', duration: 90, priority: 10 },
+  { title: 'Formation AWS', category: 'etudes', duration: 60, priority: 5 },
+  { title: 'Italien', category: 'autre', duration: 30, priority: 2 },
+];
+
+function ensureCorePlannerIdeas(d) {
+  const ideas = Array.isArray(d.ideas) ? d.ideas : [];
+  const known = new Set(ideas.map(i => String(i.title || '').trim().toLowerCase()));
+  CORE_PLANNER_IDEAS.forEach(idea => {
+    if (known.has(idea.title.toLowerCase())) return;
+    ideas.push({ id: uid(), notes: '', ...idea, plannerCore: true });
+  });
+  d.ideas = ideas;
+  return d;
+}
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -40,9 +59,9 @@ const withDefaults = d => ({ ...EMPTY_HEALTH(), meta: {}, ...d });
 function load() {
   try {
     const raw = localStorage.getItem(storageKeyFor(getSession()));
-    if (raw) return withDefaults(JSON.parse(raw));
+    if (raw) return ensureCorePlannerIdeas(withDefaults(JSON.parse(raw)));
   } catch (e) { /* données illisibles : on repart de zéro */ }
-  return withDefaults({ events: [], ideas: DEFAULT_IDEAS.map(i => ({ id: uid(), notes: '', ...i })) });
+  return ensureCorePlannerIdeas(withDefaults({ events: [], ideas: DEFAULT_IDEAS.map(i => ({ id: uid(), notes: '', ...i })) }));
 }
 
 let data = load();

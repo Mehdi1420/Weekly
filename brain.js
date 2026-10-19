@@ -225,9 +225,13 @@ function coveredByRoutine(idea) {
   return data.routines.some(r => { const rk = norm(r.title); return rk === k || (rk.length >= 4 && (k.includes(rk) || rk.includes(k))); });
 }
 
+function isStandaloneMatchIdea(idea) {
+  return /futsal|mini[- ]?foot|football|match/.test(norm(idea.title));
+}
+
 function bestIdeas(iso, slot, exclude = new Set()) {
   return data.ideas
-    .filter(i => i.duration <= slot[1] - slot[0] && !exclude.has(i.id) && !coveredByRoutine(i))
+    .filter(i => i.duration <= slot[1] - slot[0] && !exclude.has(i.id) && !coveredByRoutine(i) && !isStandaloneMatchIdea(i))
     .map(i => {
       const u = usualStart(i.title, iso) ?? (i.at ? toMin(i.at) : null);
       const fits = u !== null && u >= slot[0] && u + i.duration <= slot[1];
@@ -266,13 +270,12 @@ function plannerCandidate(idea, weekStart, ctx) {
     const [start, end] = leisureWindow(iso);
     windowsByDate[iso] = [[start, end]];
   }
-  const scores = Object.keys(windowsByDate).map(iso => scoreIdea(idea, iso, idea.at ? toMin(idea.at) : null));
   return {
     id: idea.id,
     title: idea.title,
     category: idea.category,
     duration: idea.duration,
-    priority: Math.max(1, Math.round((Math.max(...scores, 1) + 4) * 2)),
+    priority: Math.max(1, idea.priority || (idea.category === 'etudes' ? 7 : idea.category === 'sport' ? 4 : 2)),
     load: highIntensity ? 3 : idea.category === 'sport' ? 2 : 1,
     intensity: highIntensity ? 'high' : idea.category === 'sport' ? 'medium' : 'low',
     preferredStart: usualStart(idea.title, toISO(weekStart)) ?? (idea.at ? toMin(idea.at) : null),
@@ -292,7 +295,7 @@ function proposeWeek(weekStart) {
   ctx.props.forEach(p => fixed.push({ ...p, type: plannerType(p), load: plannerLoad(p), intensity: 'medium' }));
 
   const candidates = data.ideas
-    .filter(i => i.duration >= 15 && !coveredByRoutine(i))
+    .filter(i => i.duration >= 15 && !coveredByRoutine(i) && !isStandaloneMatchIdea(i))
     .map(i => plannerCandidate(i, weekStart, ctx))
     .sort((a, b) => b.priority - a.priority);
   const planned = WeeklyPlanner.planWeek({
