@@ -283,7 +283,7 @@ function renderWeek() {
   if (!isPast) {
     html += proposals.length
       ? `<div class="row-buttons"><button class="primary" data-action="props-all">✓ Tout accepter (${proposals.length})</button><button class="secondary" data-action="props-clear">Effacer</button></div>`
-      : '<div class="row-buttons week-actions"><button class="secondary" data-action="propose-week">✨ Proposer ma semaine</button><button class="secondary" data-action="tell-weekly">💬 Un changement&nbsp;?</button></div>';
+      : '<div class="row-buttons week-actions"><button class="secondary" data-action="propose-week">Proposer ma semaine</button></div>';
   }
 
   const totalEntries = Object.entries(totals);
@@ -292,7 +292,7 @@ function renderWeek() {
       `<span class="chip cat-chip" style="--c:${cat(c).color}">${cat(c).icon} ${cat(c).name} · ${fmtDuration(m)}</span>`).join('')}</div>`;
   }
 
-  html += renderWeekGrid(start, proposals, todayISO);
+  html += renderWeekAgenda(start, proposals, todayISO);
   view.innerHTML = html;
   placeGridScroll(isCurrent);
 }
@@ -328,6 +328,24 @@ function layoutDay(items) {
   return out;
 }
 
+function renderWeekAgenda(start, proposals, todayISO) {
+  const days = [...Array(7)].map((_, i) => toISO(addDays(start, i)));
+  return `<div class="agenda">${days.map(iso => {
+    const items = [...eventsOn(iso), ...proposals.filter(p => p.date === iso)]
+      .sort((a, b) => a.start.localeCompare(b.start));
+    const d = fromISO(iso);
+    const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const body = items.length ? items.map(ev => {
+      if (ev.ideaId && !data.events.some(x => x.id === ev.id)) {
+        return `<div class="event ghost"><span class="bar" style="background:${cat(ev.category).color}"></span><span class="time">${ev.start}</span><span class="grow"><span class="title">${esc(ev.title)}</span><span class="note"> · proposition</span></span><button class="mini no" data-action="prop-no" data-id="${ev.id}" aria-label="Refuser">✕</button><button class="mini ok" data-action="prop-ok" data-id="${ev.id}" aria-label="Accepter">✓</button></div>`;
+      }
+      return `<button class="event ${ev.done ? 'done' : ''}" data-action="edit" data-id="${ev.id}"><span class="bar" style="background:${cat(ev.category).color}"></span><span class="time">${ev.start}</span><span class="grow"><span class="title">${cat(ev.category).icon} ${esc(ev.title)}</span><span class="note"> · ${fmtDuration(durMin(ev))}</span></span></button>`;
+    }).join('') : '<div class="empty">Aucune activité</div>';
+    return `<section class="day ${iso === todayISO ? 'today' : ''}"><div class="day-head"><span class="day-title">${esc(label)}</span><button class="day-add" data-action="add" data-date="${iso}" aria-label="Ajouter">+</button></div><div class="day-list">${body}</div></section>`;
+  }).join('')}</div><p class="help week-help">Touche une activité pour la modifier · + pour en ajouter une.</p>`;
+}
+
+// ---------- Ancienne grille de détail (conservée pour compatibilité) ----------
 function renderWeekGrid(start, proposals, todayISO) {
   const days = [...Array(7)].map((_, i) => toISO(addDays(start, i)));
   const all = days.flatMap(iso => [...eventsOn(iso), ...proposals.filter(p => p.date === iso)]);

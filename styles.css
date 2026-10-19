@@ -1,13 +1,13 @@
 :root {
-  --bg: #dcdce6;
-  --card: #ececf2;
-  --text: #17171c;
-  --muted: #6b6b76;
-  --line: #cacad6;
-  --accent: #4a4ac4;
-  --danger: #e0362b;
-  --tabbar: rgba(214, 214, 224, 0.92);
-  --radius: 14px;
+  --bg: #f6f6f3;
+  --card: #ffffff;
+  --text: #171918;
+  --muted: #737873;
+  --line: #e5e7e3;
+  --accent: #245c45;
+  --danger: #c83b32;
+  --tabbar: rgba(246, 246, 243, 0.94);
+  --radius: 10px;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -79,8 +79,17 @@ main {
 .event.done .title { text-decoration: line-through; color: var(--muted); }
 .day-list { padding-bottom: 6px; }
 
-/* Activités */
-.list { background: var(--card); border-radius: var(--radius); overflow: hidden; }
+.agenda { display: grid; gap: 8px; }
+.agenda .day { margin: 0; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(20, 30, 24, .03); }
+.agenda .day.today { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
+.agenda .day-head { padding: 11px 12px 8px 14px; }
+.agenda .day-title { font-size: 15px; }
+.agenda .event { padding: 10px 12px 10px 14px; }
+.agenda .empty { padding: 0 14px 11px; }
+.week-help { text-align: center; margin-top: 10px; }
+body[data-tab="week"] .cat-chip { display: none; }
+body[data-tab="week"] .suggestion { border-width: 1px; }
+
 .idea { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
 .idea:first-child { border-top: 0; }
 .idea-main { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 0; }
