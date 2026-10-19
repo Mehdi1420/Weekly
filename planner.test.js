@@ -24,4 +24,21 @@ assert.equal(result.placed.find(x => x.id === 'ma2').date, '2026-09-07', 'la ses
 assert.equal(result.rejected.some(x => x.id === 'intervals'), true, 'les activités impossibles doivent être expliquées');
 assert.equal(overlaps({ start: '10:00', end: '11:00' }, { start: '11:10', end: '12:00' }, 15), true, 'le buffer doit être pris en compte');
 
+const windowed = planWeek({
+  weekStart: '2026-09-07',
+  fixed: [],
+  candidates: [{ id: 'morning-only', title: 'Session', duration: 60, priority: 5, windowsByDate: { '2026-09-07': [[18 * 60, 20 * 60]] } }],
+});
+assert.equal(windowed.placed[0].date, '2026-09-07', 'une activité doit respecter sa fenêtre de jour');
+assert.equal(windowed.placed[0].start, '18:00', 'une activité doit commencer dans sa fenêtre');
+
+const capacity = planWeek({
+  weekStart: '2026-09-07',
+  fixed: [{ title: 'Travail', type: 'work', date: '2026-09-07', start: '09:00', end: '17:00', load: 5 }],
+  candidates: [{ id: 'overload', title: 'Séance', duration: 60, priority: 5, load: 2, days: [0] }],
+  options: { maxDailyLoad: 6 },
+});
+assert.equal(capacity.placed.some(x => x.id === 'overload'), false, 'la capacité quotidienne doit être respectée');
+assert.equal(capacity.rejected.some(x => x.id === 'overload'), true, 'la surcharge doit être expliquée');
+
 console.log('planner tests: ok');

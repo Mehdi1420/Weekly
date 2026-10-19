@@ -70,11 +70,13 @@
       let chosen = null;
       for (const date of eligible) {
         const dayFixed = fixedForDay(fixed, date);
-        const starts = candidate.preferredStart != null
-          ? [toMin(candidate.preferredStart), cfg.dayStart]
-          : [cfg.dayStart];
+        const windows = (candidate.windowsByDate && candidate.windowsByDate[date]) || [[cfg.dayStart, cfg.dayEnd]];
+        const preferred = candidate.preferredStart != null ? toMin(candidate.preferredStart) : null;
+        const starts = preferred != null ? [preferred, ...windows.map(([start]) => start)] : windows.map(([start]) => start);
         for (const base of starts) {
-          for (let start = base; start + candidate.duration <= cfg.dayEnd; start += 15) {
+          const window = windows.find(([start, end]) => base >= start && base < end) || windows[0];
+          const first = Math.max(window[0], base);
+          for (let start = first; start + candidate.duration <= window[1]; start += 15) {
             if (canPlace(candidate, date, start, dayFixed, placed, cfg)) {
               chosen = { ...candidate, date, start: fromMin(start), end: fromMin(start + candidate.duration), planned: true };
               break;

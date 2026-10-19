@@ -237,62 +237,77 @@ function bestIdeas(iso, slot, exclude = new Set()) {
     .sort((x, y) => y.score - x.score);
 }
 
-// Semaine proposée, dans cet ordre : sessions pour les devoirs, sessions des projets perso,
-// puis loisirs (les meilleures paires jour/idée d'abord, une idée au plus une fois,
-// une par soir de semaine et deux par jour de week-end), sans chevauchement
-function proposeWeek(weekStart) {
-  const ctx = { today: toISO(new Date()), busy: {}, props: [] };
-  planWorkSessions(weekStart, ctx);
-  const pairs = [];
+// Semaine proposée : les devoirs et projets sont d'abord placés, puis le moteur
+// à contraintes place les activités flexibles dans les créneaux restants.
+function plannerType(ev) {
+  const title = norm(ev.title);
+  if (/mini[- ]?foot|match|football|foot/.test(title)) return 'match';
+  if (ev.category === 'travail' || /prof|cours|ecole|universite/.test(title)) return 'work';
+  if (ev.category === 'etudes' || ev.kind === 'task' || ev.kind === 'project') return 'study';
+  return ev.type || ev.category || 'other';
+}
+
+function plannerLoad(ev) {
+  if (ev.load != null) return ev.load;
+  const type = plannerType(ev);
+  if (type === 'work') return 3;
+  if (type === 'match' || ev.intensity === 'high') return 3;
+  if (ev.category === 'etudes' || ev.kind === 'task' || ev.kind === 'project') return 2;
+  return ev.intensity === 'medium' ? 2 : 1;
+}
+
+function plannerCandidate(idea, weekStart, ctx) {
+  const title = norm(idea.title);
+  const highIntensity = /fractionne|fractionne|intervall|sprint|legs|muscu|musculation|match|football|foot/.test(title);
+  const windowsByDate = {};
   for (let i = 0; i < 7; i++) {
     const iso = toISO(addDays(weekStart, i));
     if (iso < ctx.today) continue;
-    freeSlots(iso, iso === ctx.today ? roundTo(nowMinutes() + 30) : 0, ctx.busy[iso] || [])
-      .forEach(slot => bestIdeas(iso, slot).forEach(r => pairs.push({ iso, ...r })));
+    const [start, end] = leisureWindow(iso);
+    windowsByDate[iso] = [[start, end]];
   }
-  pairs.sort((x, y) => y.score - x.score);
-  const uses = {};
-  let ideas = 0;
-  let sports = sportCount(toISO(weekStart), toISO(addDays(weekStart, 6)));
-
-  // Essaie de placer une paire (jour, idée) ; décale au prochain créneau libre si besoin
-  const tryPlace = p => {
-    if (ideas >= MAX_WEEK_PROPOSALS) return false;
-    const sameDay = ctx.props.filter(x => x.date === p.iso && x.kind === 'idea');
-    if (sameDay.length >= (weekdayOf(p.iso) >= 5 ? MAX_PER_DAY.weekend : MAX_PER_DAY.week)) return false;
-    if (sameDay.some(x => x.ideaId === p.idea.id)) return false;
-    if (dayLoad(p.iso, ctx) >= dayCap(p.iso)) return false; // journée déjà bien remplie
-    let start = p.start;
-    let end = Math.min(start + p.idea.duration, 23 * 60 + 59);
-    if ((ctx.busy[p.iso] || []).some(([s, e]) => start < e && end > s)) {
-      // Créneau pris : on se place au plus près de l'heure voulue ; une activité qui a une heure
-      // naturelle (dîner le soir…) n'est pas déplacée de plus de 2 h
-      const from = p.iso === ctx.today ? roundTo(nowMinutes() + 30) : 0;
-      const options = freeSlots(p.iso, from, ctx.busy[p.iso] || [])
-        .filter(([s, e]) => e - s >= p.idea.duration)
-        .map(([s, e]) => Math.min(Math.max(p.start, s), e - p.idea.duration))
-        .sort((x, y) => Math.abs(x - p.start) - Math.abs(y - p.start));
-      if (!options.length || (p.timed && Math.abs(options[0] - p.start) > 120)) return false;
-      start = options[0];
-      end = Math.min(start + p.idea.duration, 23 * 60 + 59);
-    }
-    uses[p.idea.id] = (uses[p.idea.id] || 0) + 1;
-    ideas++;
-    if (p.idea.category === 'sport') sports++;
-    (ctx.busy[p.iso] ||= []).push([start, end]);
-    ctx.props.push({ id: uid(), kind: 'idea', ideaId: p.idea.id, title: p.idea.title, category: p.idea.category, date: p.iso, start: fromMin(start), end: fromMin(end) });
-    return true;
+  const scores = Object.keys(windowsByDate).map(iso => scoreIdea(idea, iso, idea.at ? toMin(idea.at) : null));
+  return {
+    id: idea.id,
+    title: idea.title,
+    category: idea.category,
+    duration: idea.duration,
+    priority: Math.max(1, Math.round((Math.max(...scores, 1) + 4) * 2)),
+    load: highIntensity ? 3 : idea.category === 'sport' ? 2 : 1,
+    intensity: highIntensity ? 'high' : idea.category === 'sport' ? 'medium' : 'low',
+    preferredStart: usualStart(idea.title, toISO(weekStart)) ?? (idea.at ? toMin(idea.at) : null),
+    windowsByDate,
+    conflictsWith: highIntensity ? ['match'] : [],
+    idea,
   };
+}
 
-  // 1. Sport d'abord, jusqu'à l'objectif de séances : on varie les sports avant d'en répéter un
-  const sportPairs = pairs.filter(p => p.idea.category === 'sport');
-  while (sports < prefs().sportPerWeek) {
-    const next = [...sportPairs].sort((x, y) => (uses[x.idea.id] || 0) - (uses[y.idea.id] || 0) || y.score - x.score).find(tryPlace);
-    if (!next) break;
-  }
-  // 2. Le reste, une fois chaque idée
-  pairs.forEach(p => { if (!uses[p.idea.id]) tryPlace(p); });
-  return ctx.props.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
+function proposeWeek(weekStart) {
+  const ctx = { today: toISO(new Date()), busy: {}, props: [] };
+  planWorkSessions(weekStart, ctx);
+  const ws = toISO(weekStart), we = toISO(addDays(weekStart, 6));
+  const fixed = data.events.filter(e => e.date >= ws && e.date <= we).map(e => ({
+    ...e, type: plannerType(e), load: plannerLoad(e), intensity: e.intensity || (plannerLoad(e) >= 3 ? 'high' : 'medium'),
+  }));
+  ctx.props.forEach(p => fixed.push({ ...p, type: plannerType(p), load: plannerLoad(p), intensity: 'medium' }));
+
+  const candidates = data.ideas
+    .filter(i => i.duration >= 15 && !coveredByRoutine(i))
+    .map(i => plannerCandidate(i, weekStart, ctx))
+    .sort((a, b) => b.priority - a.priority);
+  const planned = WeeklyPlanner.planWeek({
+    weekStart: ws,
+    fixed,
+    candidates,
+    options: { dayStart: 7 * 60, dayEnd: 23 * 60, bufferMinutes: 15, maxDailyLoad: 6 },
+  });
+  const ideaProps = planned.placed.slice(0, MAX_WEEK_PROPOSALS).map(p => ({
+    id: uid(), kind: 'idea', ideaId: p.id, title: p.title, category: p.category,
+    date: p.date, start: p.start, end: p.end,
+  }));
+  const result = [...ctx.props, ...ideaProps].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  proposeWeek.lastReport = { placed: result.length, rejected: planned.rejected };
+  return result;
 }
 
 // Prochain créneau libre aujourd'hui, avec la meilleure idée pour le remplir
